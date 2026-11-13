@@ -31,7 +31,11 @@ Built at NEAR HACKATHON: PrivateTriage, AI triage for unpublished vuln reports. 
 
 Optional tags per the rules: @NearLegion and @NearBuilders.
 
-## 3. Demo video storyboard (about 105 s, screen recording of the guided demo plus one live run)
+## 3. Demo video
+
+**Produced** (local, unpublished): `~/Dev/Hackathons/NEAR/privatetriage-video/final/privatetriage-demo.mp4`, 1:50, recorded against `c747d69`. It includes one real live triage, the guided-demo replays and the offline re-verification terminal. Validation, facts and sync checks pass. The original storyboard it was built from is kept below for reference.
+
+### Storyboard (about 105 s, screen recording of the guided demo plus one live run)
 
 Record at 1440×900 with the system in dark mode. Run `npm run build && npm start` with a key, for scene 5. Everything else works in demo mode.
 
@@ -89,7 +93,7 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 | README names Pursewarden (Q-015) | ✅ |
 | **Pursewarden README names PrivateTriage (Q-015)** | ⏳ owner: add the line in docs/PURSEWARDEN_DIFFERENCE.md |
 | Create a public GitHub repository and push | ⏳ owner approval |
-| Record and approve the demo video | ⏳ owner |
+| Record the demo video | ✅ produced (1:50, validated); ⏳ owner listens and approves |
 | Publish the X post | ⏳ owner |
 | Optional: enable Pages and run the manual Pages workflow | ⏳ owner |
 | Submit (one attempt per repo) | ⏳ owner confirms the exact payload |

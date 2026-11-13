@@ -99,7 +99,30 @@ Remaining work is owner-only: publication, the video, the X post, the Pursewarde
 - Checked at 1440 px and 390 px, with no horizontal overflow and no console errors (headless Chrome).
 - The verdict banner always qualifies its scope, and property badges sit beside the specific claims they cover.
 - Screenshots are in `docs/media/`.
+- Six UI issues were found while recording the video and fixed in `c747d69`:
+  - the CVSS band is now recomputed from the vector;
+  - no transient ✗ appears before the receipt arrives;
+  - the action buttons stay together;
+  - the spinner no longer overlaps its label;
+  - the hero labels Gate 1 as a recorded real run;
+  - the tamper list follows "Run all".
+- Known cosmetic issue: the hero proof-strip label wraps "UTC" onto a second line at some desktop widths.
 
+## DEMO VIDEO (local, unpublished)
+
+- **File:** `~/Dev/Hackathons/NEAR/privatetriage-video/final/privatetriage-demo.mp4`, 1:50, 1920×1080, AI narration (disclosed on the end card), with `.en.srt` subtitles and `narration/SCRIPT.md`.
+- **Made with:** the owner's `demo-video` skill (dvk), recorded against `c747d69`.
+- **Footage:**
+  - **Real footage:** one live NEAR AI Cloud triage of a fictional sample (VERIFIED in 17.0 s; the model said CVSS 9.8, the vector recomputes to 9.9).
+  - **Guided-demo replays:** the recorded genuine runs.
+  - **Terminal:** offline re-verification in a clean clone.
+- **Checks:**
+  - `dvk validate` passes, including the OCR privacy scan.
+  - `dvk facts` passes 29/29 against the clone and the exported live evidence.
+  - Sync is within tolerance.
+- **Not yet checked:** nobody has listened to the audio, so the owner should listen once.
+- **Repo URL on the end card:** add it once the repo is public (`assets/endcard.html`, then `dvk endcard && dvk render`).
+- **Earlier cut:** the first cut, recorded on `1b83bf6`, is in `final/archive/`.
 ## CODE
 
 ```
@@ -126,7 +149,7 @@ npm run verify -- evidence/gate1/2026-11-13T16-12-38-022Z/evidence.json --receip
 
 - **Live mode:** add `NEARAI_CLOUD_API_KEY` to `.env`, run `npm start`, then click "Attest & triage".
 - **Gate 1 probe:** `npm run gate1`.
-- **Inference spend so far:** about $0.06 of the $3 credit, including probes, model comparison, 3 recording rounds and one live UI test.
+- **Inference spend so far:** about $0.10 of the $3 credit, including probes, model comparison, 3 recording rounds, 2 live UI tests, the post-review Gate 1 re-run and 2 live video takes.
 
 ## SUBMISSION
 
@@ -146,4 +169,8 @@ Rules come from the live `HACKATHON.md`, checked on 2026-11-13:
 
 ## NEXT ACTION
 
-Owner: create the public GitHub repository (suggested name `mickeyjoes/near-private-triage`) and approve the push. Then add the one-line reciprocal note to Pursewarden's README. After that: approve the demo video, post on X, and submit.
+Owner: watch and listen to the demo video, then create the public GitHub repository (suggested name `mickeyjoes/near-private-triage`) and approve the push. Then:
+1. Add the one-line reciprocal note to Pursewarden's README (rule Q-015).
+2. Optionally add the repo URL to the video's end card.
+3. Post on X with the video (draft in `docs/SUBMISSION.md`).
+4. Submit with the payload template, filling in your personal fields.
