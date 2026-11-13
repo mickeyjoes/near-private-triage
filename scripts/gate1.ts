@@ -31,7 +31,7 @@ const requestBody = Buffer.from(
           'PrivateTriage Gate-1 probe (non-confidential). In one sentence: why should a security team verify where an AI model runs before sending it an unpublished vulnerability report?',
       },
     ],
-    max_tokens: 400,
+    max_tokens: 1500,
     temperature: 0.2,
     stream: false,
   }),
