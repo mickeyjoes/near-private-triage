@@ -14,3 +14,4 @@ __pycache__/
 
 # Local, possibly sensitive run artifacts (raw prompts/responses)
 .private/
+web/public/demo/

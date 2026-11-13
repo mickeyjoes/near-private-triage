@@ -335,7 +335,7 @@ export const SCENARIOS: TamperScenario[] = [
   {
     id: 'bundle_policy_relaxed',
     title: 'Bundle tries to relax the policy',
-    attack: 'The evidence file rewrites its own policy to accept out-of-date platform firmware and a debug enclave. The verifier ignores bundle-supplied policy.',
+    attack: 'The evidence file rewrites its own policy to accept out-of-date or revoked platform firmware — and ships an edited verdict. The verifier ignores bundle-supplied policy and still catches the edit.',
     expect: 'FAILED',
     property: 'response_signature',
     check: 'signed_text',
