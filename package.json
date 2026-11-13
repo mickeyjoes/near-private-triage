@@ -1,0 +1,20 @@
+{
+  "name": "private-triage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {},
+  "dependencies": {
+    "@phala/dcap-qvl": "0.7.0",
+    "ethers": "6.17.0",
+    "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "6.0.3"
+  }
+}

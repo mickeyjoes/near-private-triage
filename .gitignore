@@ -1,0 +1,16 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Build / deps
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+
+# Local, possibly sensitive run artifacts (raw prompts/responses)
+.private/
