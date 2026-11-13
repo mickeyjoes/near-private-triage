@@ -79,7 +79,25 @@
           "id": "rtmr3",
           "label": "Event log replays to RTMR3",
           "status": "pass",
-          "detail": "Replaying IMR-3 events reproduces the quote RTMR3 (app-id, compose-hash, key-provider authenticated)."
+          "detail": "Replaying the IMR-3 event log reproduces the quote’s RTMR3, so the logged app events are the measured ones."
+        },
+        {
+          "id": "compose_event",
+          "label": "Measured compose-hash event matches app_compose",
+          "status": "pass",
+          "detail": "RTMR3 compose-hash event = SHA-256(app_compose) = MRCONFIGID payload."
+        },
+        {
+          "id": "os_image",
+          "label": "Pinned NEAR dstack OS image",
+          "status": "pass",
+          "detail": "NEAR AI Cloud gateway · dstack OS (observed 2026-11-13): MRTD, RTMR1, RTMR2 and os-image-hash match."
+        },
+        {
+          "id": "app_identity",
+          "label": "Pinned NEAR app identity",
+          "status": "pass",
+          "detail": "NEAR AI Cloud gateway: app-id f550fdfb4eb8…, KMS and key provider match."
         }
       ],
       "verdict": "VERIFIED"
@@ -87,7 +105,7 @@
     {
       "id": "tls_binding",
       "title": "Your report was encrypted to the attested gateway",
-      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary.",
+      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence; offline re-verification checks them against the quote but cannot re-observe the connection.",
       "checks": [
         {
           "id": "tls_spki",
@@ -155,7 +173,31 @@
           "id": "rtmr3",
           "label": "Event log replays to RTMR3",
           "status": "pass",
-          "detail": "Replaying IMR-3 events reproduces the quote RTMR3 (app-id, compose-hash, key-provider authenticated)."
+          "detail": "Replaying the IMR-3 event log reproduces the quote’s RTMR3, so the logged app events are the measured ones."
+        },
+        {
+          "id": "compose_event",
+          "label": "Measured compose-hash event matches app_compose",
+          "status": "pass",
+          "detail": "RTMR3 compose-hash event = SHA-256(app_compose) = MRCONFIGID payload."
+        },
+        {
+          "id": "os_image",
+          "label": "Pinned NEAR dstack OS image",
+          "status": "pass",
+          "detail": "NEAR AI Cloud GPU model node · dstack OS (observed 2026-11-13): MRTD, RTMR1, RTMR2 and os-image-hash match."
+        },
+        {
+          "id": "app_identity",
+          "label": "Pinned NEAR app identity",
+          "status": "pass",
+          "detail": "NEAR AI Cloud model serving: app-id 2c0a0c96cb6d…, KMS and key provider match."
+        },
+        {
+          "id": "model_name",
+          "label": "Report is for the requested model",
+          "status": "pass",
+          "detail": "Report is for z-ai/glm-5.3-flash."
         }
       ],
       "verdict": "VERIFIED"
@@ -181,7 +223,13 @@
           "id": "nras_signature",
           "label": "NRAS verdict signed by NVIDIA",
           "status": "pass",
-          "detail": "ES384 token verifies against NVIDIA JWKS; issuer nras.attestation.nvidia.com."
+          "detail": "ES384 token verifies with a key certified by a pinned NVIDIA attestation CA; issuer nras.attestation.nvidia.com."
+        },
+        {
+          "id": "time_anchor",
+          "label": "Capture time matches NVIDIA-signed time",
+          "status": "pass",
+          "detail": "Evidence evaluated at 2026-11-13T16:12:38.000Z, within 10 min of the NVIDIA-signed iat."
         },
         {
           "id": "nras_nonce",
@@ -203,6 +251,12 @@
       "title": "Analysis was signed inside the model enclave",
       "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.",
       "checks": [
+        {
+          "id": "capture_time",
+          "label": "Displayed capture time is the evaluated time",
+          "status": "pass",
+          "detail": "Captured 2026-11-13T16:12:38.022Z."
+        },
         {
           "id": "nonce_derivation",
           "label": "Challenge was derived from this request",
@@ -264,6 +318,8 @@
   "gateway": {
     "signing_address": "0xb98a789cdc4817275f5155593ba73ef2a957e779",
     "signing_algo": "ecdsa",
+    "app_id": "f550fdfb4eb8ad787c1bcd423f091cbb4a4431ae",
+    "os_image_hash": "8db40cb23008d6213668b5816702d100b37b859a8a5bfd18d938ae3a1b3715bd",
     "tls_spki_sha256": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad",
     "compose_hash": "b73eed6abc60fbe5eb0ce2bbaacf3bd9b83c9c84f3e6a5b1a091cb679bdbe66f",
     "image_digests": [
@@ -292,6 +348,8 @@
     "candidates_verified": 1,
     "signing_address": "0x3b753b4406613c5e70ae640508632b600424fa0c",
     "signing_algo": "ecdsa",
+    "app_id": "2c0a0c96cb6dbd659bf1446e2f3fce58172ff91b",
+    "os_image_hash": "91fd5d69ccee3e5ea4f2aeb8c9b632c4358c4ecfc29ba1aa6fb1e402af209829",
     "compose_hash": "c900dc7304663b73b623cd5d941fbdab6f02858017b371ae28de445a16d2e2d0",
     "image_digests": [
       "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
@@ -327,7 +385,8 @@
     "End-to-end encryption to the model. TLS terminates in the attested gateway TEE; the gateway then forwards to the model TEE over a channel this receipt does not verify.",
     "Image provenance. Container digests are measured and displayed, but not checked against a source-build allowlist.",
     "That the verified model report and the completion came from the same serving instance (instances of one model share a signing key).",
-    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost."
+    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost.",
+    "That NEAR’s pinned software is free of vulnerabilities. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software."
   ],
   "trust_assumptions": [
     "Intel TDX hardware and Intel’s attestation signing root (DCAP / PCS).",

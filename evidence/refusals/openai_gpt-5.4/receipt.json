@@ -35,7 +35,7 @@
     {
       "id": "tls_binding",
       "title": "Your report was encrypted to the attested gateway",
-      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary.",
+      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence; offline re-verification checks them against the quote but cannot re-observe the connection.",
       "checks": [
         {
           "id": "tls_spki",
@@ -106,7 +106,8 @@
     "End-to-end encryption to the model. TLS terminates in the attested gateway TEE; the gateway then forwards to the model TEE over a channel this receipt does not verify.",
     "Image provenance. Container digests are measured and displayed, but not checked against a source-build allowlist.",
     "That the verified model report and the completion came from the same serving instance (instances of one model share a signing key).",
-    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost."
+    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost.",
+    "That NEAR’s pinned software is free of vulnerabilities. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software."
   ],
   "trust_assumptions": [
     "Intel TDX hardware and Intel’s attestation signing root (DCAP / PCS).",

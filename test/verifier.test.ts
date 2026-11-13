@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { deriveNonce, evaluateBundle, type EvidenceBundle } from '../server/verifier/evidence.ts';
+import { DEFAULT_POLICY, deriveNonce, evaluateBundle, type EvidenceBundle } from '../server/verifier/evidence.ts';
 import { SCENARIOS } from '../server/verifier/tamper.ts';
 
 const load = (p: string) => JSON.parse(readFileSync(p, 'utf8')) as EvidenceBundle;
@@ -86,9 +86,49 @@ describe('tamper scenarios on genuine evidence', () => {
   }
 
   it('a stricter verifier policy rejects otherwise-genuine evidence', () => {
-    const { receipt } = evaluateBundle(base, { policy: { acceptedTcbStatuses: [] } });
+    const { receipt } = evaluateBundle(base, { policy: { ...DEFAULT_POLICY, acceptedTcbStatuses: [] } });
     assert.equal(receipt.verdict, 'FAILED');
     assert.equal(check(receipt, 'gateway_tee', 'tcb_status').c?.status, 'fail');
+  });
+
+  it('a genuine TDX guest that is not NEAR’s pinned OS image or app is UNVERIFIED and blocks disclosure', () => {
+    const none = { os: [], apps: [], mr_kms: [], key_providers: [] };
+    const policy = { ...DEFAULT_POLICY, measurements: none };
+    const { receipt, preflight } = evaluateBundle(base, { policy });
+    assert.equal(receipt.verdict, 'UNVERIFIED');
+    assert.equal(preflight.ok, false, 'preflight must not allow disclosure');
+    assert.equal(check(receipt, 'gateway_tee', 'os_image').c?.status, 'unavailable');
+    assert.equal(check(receipt, 'model_tee', 'app_identity').c?.status, 'unavailable');
+  });
+
+  it('a second model candidate that fails blocks disclosure (every candidate must verify)', () => {
+    const t = structuredClone(base);
+    const a = JSON.parse(t.attestation!.body);
+    const stale = JSON.parse(other.attestation!.body).model_attestations[0];
+    a.model_attestations.push(stale);
+    t.attestation!.body = JSON.stringify(a);
+    Object.assign(t.collateral, other.collateral);
+    const { receipt, preflight } = evaluateBundle(t);
+    assert.equal(preflight.ok, false);
+    assert.match(preflight.reason, /every candidate must verify/);
+    assert.equal(receipt.verdict, 'FAILED');
+  });
+
+  it('a model report that does not name its model fails', () => {
+    const t = structuredClone(base);
+    const a = JSON.parse(t.attestation!.body);
+    delete a.model_attestations[0].model_name;
+    t.attestation!.body = JSON.stringify(a);
+    assert.equal(check(evaluateBundle(t).receipt, 'model_tee', 'model_name').c?.status, 'fail');
+  });
+
+  it('a bundle that moves its own capture time is rejected by the NVIDIA-signed time anchor', () => {
+    const t = structuredClone(base);
+    t.captured_at_secs += 20 * 60; // small enough that the NVIDIA token is still valid
+    t.captured_at = new Date(t.captured_at_secs * 1000).toISOString();
+    const { receipt } = evaluateBundle(t);
+    assert.notEqual(receipt.verdict, 'VERIFIED');
+    assert.equal(check(receipt, 'gpu_tee', 'time_anchor').c?.status, 'fail');
   });
 
   it('evidence evaluated after collateral expiry fails rather than passing', () => {

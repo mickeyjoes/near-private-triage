@@ -30,7 +30,16 @@ export interface RequestOptions {
   body?: Buffer;
   timeoutMs?: number;
   maxResponseBytes?: number;
+  /**
+   * Refuse to send unless the request is assigned exactly this already-attested
+   * socket (same id, same peer SPKI). Nothing — not even headers — is written
+   * before the check passes, so a silently re-opened connection never carries
+   * the API key or the report.
+   */
+  requireSocket?: { id: number; spkiSha256: string };
 }
+
+export class SocketPinError extends Error {}
 
 let nextSocketId = 1;
 
@@ -41,7 +50,11 @@ export class PinnedConnection {
   private readonly socketIds = new WeakMap<TLSSocket, number>();
   private readonly spki = new WeakMap<TLSSocket, string | null>();
 
-  constructor(baseUrl: string) {
+  private readonly ca: Buffer | undefined;
+
+  /** `ca` is for tests against a local TLS server only; production uses the system trust store. */
+  constructor(baseUrl: string, opts: { ca?: Buffer } = {}) {
+    this.ca = opts.ca;
     const u = new URL(baseUrl);
     if (u.protocol !== 'https:') throw new Error('gateway base URL must be https');
     this.host = u.hostname;
@@ -92,6 +105,7 @@ export class PinnedConnection {
           headers,
           agent: this.agent,
           servername: this.host,
+          ...(this.ca ? { ca: this.ca } : {}),
         },
         (res) => {
           const socket = res.socket as TLSSocket;
@@ -121,8 +135,34 @@ export class PinnedConnection {
       );
       req.setTimeout(opts.timeoutMs ?? 120_000, () => req.destroy(new Error('request timed out')));
       req.on('error', reject);
-      if (opts.body) req.write(opts.body);
-      req.end();
+      const send = () => {
+        if (opts.body) req.write(opts.body);
+        req.end();
+      };
+      const pin = opts.requireSocket;
+      if (!pin) {
+        send();
+        return;
+      }
+      // Headers are only flushed on the first write/end, so nothing leaves this
+      // process until the assigned socket is proven to be the attested one.
+      req.once('socket', (s) => {
+        const sock = s as TLSSocket;
+        const id = this.socketIds.get(sock);
+        const spki = id === undefined ? null : (this.spki.get(sock) ?? null);
+        let live: string | null = null;
+        try {
+          const cert = sock.getPeerX509Certificate?.();
+          live = cert instanceof X509Certificate ? sha256Hex(cert.publicKey.export({ type: 'spki', format: 'der' })) : null;
+        } catch {
+          live = null;
+        }
+        if (id !== pin.id || spki !== pin.spkiSha256 || live !== pin.spkiSha256 || sock.destroyed) {
+          req.destroy(new SocketPinError('The attested TLS connection is no longer available; refusing to send on an unverified connection.'));
+          return;
+        }
+        send();
+      });
     });
   }
 }

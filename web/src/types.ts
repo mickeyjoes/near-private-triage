@@ -45,6 +45,8 @@ export interface Receipt {
   properties: Property[];
   gateway: {
     signing_address?: string | null;
+    app_id?: string | null;
+    os_image_hash?: string | null;
     tls_spki_sha256?: string | null;
     compose_hash?: string | null;
     image_digests?: string[];
@@ -52,6 +54,8 @@ export interface Receipt {
   } | null;
   model_tee: {
     signing_address?: string | null;
+    app_id?: string | null;
+    os_image_hash?: string | null;
     compose_hash?: string | null;
     image_digests?: string[];
     candidates_returned?: number;

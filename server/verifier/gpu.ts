@@ -3,7 +3,7 @@
 // verify the NRAS EAT (JWT) signature against NVIDIA's published JWKS and check
 // that the token's eat_nonce is our nonce, so the verdict itself is a signed,
 // archivable statement rather than just a TLS-authenticated HTTP response.
-import { createPublicKey, verify as cryptoVerify, type JsonWebKey } from 'node:crypto';
+import { createHash, createPublicKey, verify as cryptoVerify, type JsonWebKey, type KeyObject, X509Certificate } from 'node:crypto';
 import { EvidenceError, isRecord } from './bytes.ts';
 import { CheckList } from './types.ts';
 
@@ -35,7 +35,44 @@ function b64urlJson(part: string, label: string): Record<string, unknown> {
   }
 }
 
-/** Verify an ES384 JWT against a JWKS document. Returns the payload. */
+/**
+ * NVIDIA attestation-service intermediate CAs, pinned by SHA-256 of their DER.
+ * Observed in NVIDIA's production NRAS JWKS (fetched over WebPKI) on 2026-11-13;
+ * both are issued by "NVIDIA Attestation Service CA 001". The JWKS that signs an
+ * NRAS verdict must chain to one of these, so an evidence bundle cannot bring
+ * its own signing key. A new NVIDIA intermediate yields UNVERIFIED until pinned.
+ */
+export const NRAS_PINNED_INTERMEDIATES: Record<string, string> = {
+  '2df8907cf4d6c277b855d407ec178a649930a8e73f7294e8fce66e6ee27c5175': 'NVIDIA Attestation Service GPU Intermediate 004 (to 2029-12-08)',
+  '38e3daf3cdbd5243bb15dd7993edcdd83a7238cb6745b980f8f3bf0a31a0d343': 'NVIDIA Attestation Service GPU Intermediate 005 (to 2030-10-08)',
+};
+
+/** The JWK must be a P-384 key certified by a pinned NVIDIA intermediate, valid at nowSecs. */
+function certifiedNvidiaKey(jwk: Record<string, unknown>, nowSecs: number): KeyObject {
+  if (jwk.kty !== 'EC' || jwk.crv !== 'P-384') throw new EvidenceError('unsupported', 'NRAS key is not an EC P-384 key');
+  const x5c = Array.isArray(jwk.x5c) ? jwk.x5c : [];
+  if (x5c.length < 2 || !x5c.every((c) => typeof c === 'string')) throw new EvidenceError('unknown_key', 'NRAS key has no certificate chain (x5c)');
+  let leaf: X509Certificate;
+  let inter: X509Certificate;
+  try {
+    leaf = new X509Certificate(Buffer.from(x5c[0] as string, 'base64'));
+    inter = new X509Certificate(Buffer.from(x5c[1] as string, 'base64'));
+  } catch {
+    throw new EvidenceError('malformed', 'NRAS key certificate chain is malformed');
+  }
+  const interFp = createHash('sha256').update(inter.raw).digest('hex');
+  if (!NRAS_PINNED_INTERMEDIATES[interFp]) throw new EvidenceError('unknown_key', 'NRAS key is not certified by a pinned NVIDIA attestation CA');
+  if (!leaf.checkIssued(inter) || !leaf.verify(inter.publicKey)) throw new EvidenceError('bad_signature', 'NRAS key certificate is not signed by the NVIDIA attestation CA');
+  const t = nowSecs * 1000;
+  if (t < Date.parse(leaf.validFrom) || t > Date.parse(leaf.validTo)) throw new EvidenceError('stale', 'NRAS key certificate was not valid at evaluation time');
+  const { x5c: _x5c, ...publicJwk } = jwk;
+  const key = createPublicKey({ key: publicJwk as JsonWebKey, format: 'jwk' });
+  const der = (k: KeyObject) => k.export({ type: 'spki', format: 'der' });
+  if (!der(key).equals(der(leaf.publicKey))) throw new EvidenceError('mismatch', 'NRAS JWK does not match its certificate');
+  return key;
+}
+
+/** Verify an ES384 JWT against a JWKS document whose key chains to a pinned NVIDIA CA. Returns the payload. */
 export function verifyNrasJwt(token: string, jwksText: string, nowSecs: number): Record<string, unknown> {
   const parts = token.split('.');
   if (parts.length !== 3) throw new EvidenceError('malformed', 'NRAS token is not a JWT');
@@ -49,10 +86,10 @@ export function verifyNrasJwt(token: string, jwksText: string, nowSecs: number):
     throw new EvidenceError('malformed', 'JWKS is not JSON');
   }
   const keys = isRecord(jwks) && Array.isArray(jwks.keys) ? jwks.keys : [];
+  if (typeof header.kid !== 'string' || header.kid === '') throw new EvidenceError('malformed', 'NRAS token has no key id');
   const jwk = keys.find((k: unknown) => isRecord(k) && k.kid === header.kid);
   if (!jwk) throw new EvidenceError('unknown_key', `NRAS signing key ${String(header.kid)} not in NVIDIA JWKS`);
-  const { x5c: _x5c, ...publicJwk } = jwk as Record<string, unknown>;
-  const key = createPublicKey({ key: publicJwk as JsonWebKey, format: 'jwk' });
+  const key = certifiedNvidiaKey(jwk as Record<string, unknown>, nowSecs);
   const ok = cryptoVerify(
     'sha384',
     Buffer.from(`${parts[0]}.${parts[1]}`, 'ascii'),
@@ -62,7 +99,8 @@ export function verifyNrasJwt(token: string, jwksText: string, nowSecs: number):
   if (!ok) throw new EvidenceError('bad_signature', 'NRAS token signature does not verify');
   if (payload.iss !== NRAS_ISSUER) throw new EvidenceError('mismatch', `unexpected issuer ${String(payload.iss)}`);
   const skew = 300;
-  if (typeof payload.exp === 'number' && nowSecs > payload.exp + skew) {
+  if (typeof payload.exp !== 'number' || typeof payload.iat !== 'number') throw new EvidenceError('malformed', 'NRAS token lacks exp/iat');
+  if (nowSecs > payload.exp + skew) {
     throw new EvidenceError('stale', 'NRAS token expired at evaluation time');
   }
   if (typeof payload.nbf === 'number' && nowSecs + skew < payload.nbf) {
@@ -81,8 +119,8 @@ export function parseGpuPayload(nvidiaPayload: unknown): { text: string; nonce: 
   } catch {
     throw new EvidenceError('malformed', 'nvidia_payload is not JSON');
   }
-  if (!isRecord(p) || typeof p.nonce !== 'string' || !Array.isArray(p.evidence_list)) {
-    throw new EvidenceError('malformed', 'nvidia_payload lacks nonce/evidence_list');
+  if (!isRecord(p) || typeof p.nonce !== 'string' || !Array.isArray(p.evidence_list) || p.evidence_list.length === 0) {
+    throw new EvidenceError('malformed', 'nvidia_payload lacks nonce or GPU evidence');
   }
   return {
     text: nvidiaPayload,
@@ -164,7 +202,16 @@ export function checkGpuEvidence(
     return out;
   }
   out.claims = claims;
-  c.pass('nras_signature', 'NRAS verdict signed by NVIDIA', 'ES384 token verifies against NVIDIA JWKS; issuer nras.attestation.nvidia.com.');
+  c.pass('nras_signature', 'NRAS verdict signed by NVIDIA', 'ES384 token verifies with a key certified by a pinned NVIDIA attestation CA; issuer nras.attestation.nvidia.com.');
+  // Anchor the evaluation time to NVIDIA-signed time: a bundle cannot pick an arbitrary "now".
+  const iat = claims.iat as number;
+  c.expect(
+    Math.abs(nowSecs - iat) <= 600,
+    'time_anchor',
+    'Capture time matches NVIDIA-signed time',
+    `Evidence evaluated at ${new Date(nowSecs * 1000).toISOString()}, within 10 min of the NVIDIA-signed iat.`,
+    `Evaluation time differs from the NVIDIA-signed iat (${new Date(iat * 1000).toISOString()}) by more than 10 minutes.`,
+  );
   c.expect(
     typeof claims.eat_nonce === 'string' && claims.eat_nonce.toLowerCase() === nonceHex.toLowerCase(),
     'nras_nonce',

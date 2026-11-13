@@ -2,6 +2,7 @@
 // a concrete attack or failure, and states the verdict the verifier must reach.
 // Used by the negative test suite and by the UI's Tamper Lab (precomputed by
 // scripts/build-demo.ts with this same code). Pure functions: no network.
+import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { ethers } from 'ethers';
 import { isRecord, sha256Hex } from './bytes.ts';
 import { type EvidenceBundle, quoteKey } from './evidence.ts';
@@ -281,6 +282,54 @@ export const SCENARIOS: TamperScenario[] = [
     },
   },
   {
+    id: 'nras_self_certified',
+    title: 'NVIDIA verdict re-signed with an attacker key',
+    attack: 'The attacker forges a passing GPU verdict, signs it with their own P-384 key, and ships a key set that reuses NVIDIA’s genuine certificate chain under the same key id. The key does not match NVIDIA’s certificate.',
+    expect: 'FAILED',
+    property: 'gpu_tee',
+    check: 'nras_signature',
+    apply: (b) => {
+      const t = clone(b);
+      const n = t.nras['0']!;
+      const arr = JSON.parse(n.nrasResponse) as unknown[];
+      const pair = arr[0] as [string, string];
+      const [h, p] = pair[1].split('.') as [string, string, string];
+      const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8')) as { kid: string };
+      const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-384' });
+      const sig = cryptoSign('sha384', Buffer.from(`${h}.${p}`), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+      pair[1] = `${h}.${p}.${sig}`;
+      const jwks = JSON.parse(n.jwks) as { keys: Record<string, unknown>[] };
+      const genuine = jwks.keys.find((k) => k.kid === header.kid)!;
+      const forged = { ...(publicKey.export({ format: 'jwk' }) as Record<string, unknown>), kid: header.kid, x5c: genuine.x5c };
+      t.nras['0'] = { nrasResponse: JSON.stringify(arr), jwks: JSON.stringify({ keys: [forged] }) };
+      return t;
+    },
+  },
+  {
+    id: 'event_log_rewritten',
+    title: 'Event log rewritten to claim another app',
+    attack: 'The model report’s event log is edited to claim a different app identity than the one the hardware measured.',
+    expect: 'FAILED',
+    property: 'model_tee',
+    check: 'rtmr3',
+    apply: (b) => {
+      const t = clone(b);
+      const a = att(t);
+      const m = (a.model_attestations as Record<string, unknown>[])[0]!;
+      const info = m.info as Record<string, unknown>;
+      const tcbRaw = info.tcb_info;
+      const tcb = (typeof tcbRaw === 'string' ? JSON.parse(tcbRaw) : tcbRaw) as Record<string, unknown>;
+      const raw = m.event_log ?? tcb.event_log;
+      const log = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { event: string; event_payload: string; digest?: string }[];
+      const ev = log.find((e) => e.event === 'app-id')!;
+      ev.event_payload = flipHex(ev.event_payload, 2);
+      delete ev.digest;
+      m.event_log = typeof raw === 'string' ? JSON.stringify(log) : log;
+      setAtt(t, a);
+      return t;
+    },
+  },
+  {
     id: 'gpu_evidence_missing',
     title: 'GPU attestation unavailable',
     attack: 'NVIDIA’s attestation service is unreachable, so GPU confidential-computing mode cannot be confirmed.',
@@ -341,7 +390,10 @@ export const SCENARIOS: TamperScenario[] = [
     check: 'signed_text',
     apply: (b) => {
       const t = clone(b);
-      t.policy = { acceptedTcbStatuses: ['UpToDate', 'OutOfDate', 'ConfigurationNeeded', 'Revoked'] };
+      t.policy = {
+        acceptedTcbStatuses: ['UpToDate', 'OutOfDate', 'ConfigurationNeeded', 'Revoked'],
+        measurements: { os: [], apps: [], mr_kms: [], key_providers: [] },
+      };
       // ...combined with an edited response, to show the relaxed policy buys nothing.
       editResponse(t, downgradeSeverity, true);
       return t;

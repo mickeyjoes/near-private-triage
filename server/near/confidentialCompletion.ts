@@ -23,7 +23,7 @@ import {
 import { fetchNrasEvidence, type NrasEvidence, parseGpuPayload } from '../verifier/gpu.ts';
 import { DEFAULT_POLICY, type ReportPolicy } from '../verifier/nearReport.ts';
 import { type Collateral, fetchCollateral } from '../verifier/tdx.ts';
-import { PinnedConnection } from './connection.ts';
+import { PinnedConnection, SocketPinError } from './connection.ts';
 
 export const DEFAULT_ENDPOINT = 'https://cloud-api.near.ai';
 
@@ -193,6 +193,7 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
     let responseBytes: Buffer | null = null;
     try {
       const ex = await conn.request({
+        requireSocket: { id: bundle.attestation!.socket_id, spkiSha256: bundle.attestation!.peer_spki_sha256! },
         method: 'POST',
         path: '/v1/chat/completions',
         headers: {
@@ -220,7 +221,8 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
         peer_spki_sha256: ex.peerSpkiSha256,
       };
     } catch (e) {
-      bundle.blocked_reason = `Inference request failed: ${(e as Error).message}`;
+      bundle.blocked_reason =
+        e instanceof SocketPinError ? `Report NOT sent: ${e.message}` : `Inference request failed: ${(e as Error).message}`;
     }
 
     // --- Signature (bounded retry: it may take a moment to be recorded) ---

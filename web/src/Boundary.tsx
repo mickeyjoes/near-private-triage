@@ -47,7 +47,7 @@ export function Refusals({ data, live }: { data: DemoData; live: boolean }) {
             <VerdictBadge v="UNVERIFIED" compact />
           </div>
           <p className="small">
-            During development NVIDIA’s attestation service timed out {data.outages.length} times. Each time the GPU verdict could not be confirmed, so the (fictional) report was held back — the pipeline never “falls back” to sending.
+            During development NVIDIA’s attestation service was unreachable or timed out {data.outages.length} times. Each time the GPU verdict could not be confirmed, so the (fictional) report was held back — the pipeline never “falls back” to sending.
           </p>
           <div className="refusal-foot">
             <span className="sent-no">Reports sent: 0 of {data.outages.length}</span>

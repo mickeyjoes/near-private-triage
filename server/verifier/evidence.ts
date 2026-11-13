@@ -94,6 +94,9 @@ export interface PreflightResult {
 
 export const quoteKey = (quoteHex: string): string => sha256Hex(quoteHex);
 
+/** Upper bound on model candidates evaluated (each costs a quote verification). */
+export const MAX_CANDIDATES = 8;
+
 /** A short, sanitized provider error message (public attestation endpoint; no secrets). */
 function providerMessage(body: string | undefined): string {
   if (!body) return '';
@@ -142,6 +145,7 @@ export function evaluatePreflight(b: EvidenceBundle, policy: ReportPolicy = DEFA
     collateral: collateralFor(att.gateway_attestation),
     nowSecs: b.captured_at_secs,
     policy,
+    role: 'gateway',
     peerSpkiSha256: b.attestation.peer_spki_sha256 ?? undefined,
   });
   // tls_spki is evaluated as part of the TLS-binding property, not the gateway TEE property.
@@ -150,6 +154,11 @@ export function evaluatePreflight(b: EvidenceBundle, policy: ReportPolicy = DEFA
 
   const candidates: CandidateResult[] = [];
   const list = Array.isArray(att.model_attestations) ? att.model_attestations : [];
+  if (list.length > MAX_CANDIDATES) {
+    empty.reason = `Attestation lists ${list.length} model candidates (limit ${MAX_CANDIDATES}).`;
+    empty.attestationError = { id: 'report_present', label: 'Attestation report present', status: 'fail', detail: empty.reason };
+    return empty;
+  }
   list.forEach((rep, index) => {
     const report = checkNearReport({
       report: rep,
@@ -157,10 +166,17 @@ export function evaluatePreflight(b: EvidenceBundle, policy: ReportPolicy = DEFA
       collateral: collateralFor(rep),
       nowSecs: b.captured_at_secs,
       policy,
+      role: 'model',
     });
-    if (isRecord(rep) && typeof rep.model_name === 'string' && rep.model_name !== b.model) {
-      report.checks.fail('model_name', 'Report is for the requested model', `Report is for ${rep.model_name}, not ${b.model}.`);
-    }
+    // NEAR policy: every candidate must be a report for exactly the requested model.
+    const name = isRecord(rep) ? rep.model_name : undefined;
+    report.checks.expect(
+      name === b.model,
+      'model_name',
+      'Report is for the requested model',
+      `Report is for ${b.model}.`,
+      typeof name === 'string' ? `Report is for "${name}", not ${b.model}.` : `Report does not name its model (expected ${b.model}).`,
+    );
     const gpu = checkGpuEvidence(isRecord(rep) ? rep.nvidia_payload : undefined, b.nonce.value, b.nras[String(index)] ?? null, b.captured_at_secs, b.nras_errors?.[String(index)]);
     const verdict = verdictOf([...report.checks.checks, ...gpu.checks.checks]);
     candidates.push({ index, report, gpu, verdict, identity: report.identity });
@@ -168,9 +184,12 @@ export function evaluatePreflight(b: EvidenceBundle, policy: ReportPolicy = DEFA
   const verifiedModelSigners = candidates.filter((c) => c.verdict === 'VERIFIED' && c.identity).map((c) => c.identity!);
 
   let reason = '';
+  const unverified = candidates.filter((c) => c.verdict !== 'VERIFIED');
   if (gatewayVerdict !== 'VERIFIED') reason = 'Gateway TEE evidence did not verify.';
   else if (list.length === 0) reason = 'No model-TEE attestation was returned for this model (not a confidential TEE model, or evidence unavailable).';
   else if (verifiedModelSigners.length === 0) reason = 'No model-TEE attestation candidate verified.';
+  // Any candidate could serve the request, so every candidate must verify before disclosure.
+  else if (unverified.length > 0) reason = `Model candidate${unverified.length > 1 ? 's' : ''} ${unverified.map((c) => `#${c.index}`).join(', ')} did not verify; every candidate must verify before the report is sent.`;
   const tls = gateway.checks.checks.find((c) => c.id === 'tls_spki');
   if (!reason && (!tls || tls.status !== 'pass')) reason = 'Gateway TLS key is not proven to live inside the attested gateway.';
   return { gateway, gatewayVerdict, candidates, verifiedModelSigners, ok: reason === '', reason, attestationError: null };
@@ -204,6 +223,7 @@ const NOT_PROVEN = [
   'Image provenance. Container digests are measured and displayed, but not checked against a source-build allowlist.',
   'That the verified model report and the completion came from the same serving instance (instances of one model share a signing key).',
   'Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost.',
+  'That NEAR’s pinned software is free of vulnerabilities. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software.',
 ];
 
 const TRUST_ASSUMPTIONS = [
@@ -231,6 +251,13 @@ function b64Bytes(v: unknown): Buffer | null {
 function bindingChecks(b: EvidenceBundle): Check[] {
   const c = new CheckList();
   const n = b.nonce;
+  c.expect(
+    Number.isInteger(b.captured_at_secs) && Math.floor(Date.parse(b.captured_at) / 1000) === b.captured_at_secs,
+    'capture_time',
+    'Displayed capture time is the evaluated time',
+    `Captured ${b.captured_at}.`,
+    'The displayed capture time differs from the time the evidence was evaluated at.',
+  );
   let derived = '';
   try {
     derived = deriveNonce(n.salt, n.request_sha256);
@@ -304,7 +331,7 @@ export function evaluateBundle(
     tlsChecks.unavailable('same_connection', 'Report sent over the attested connection', 'No inference request was sent.');
   }
   properties.push(prop('tls_binding', 'Your report was encrypted to the attested gateway',
-    'The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary.', tlsChecks.checks));
+    'The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence; offline re-verification checks them against the quote but cannot re-observe the connection.', tlsChecks.checks));
 
   // Signature
   let sig: SignatureCheckResult | null = null;
@@ -324,7 +351,8 @@ export function evaluateBundle(
     });
   }
 
-  // Model TEE + GPU: report on the candidate the signer matched; otherwise all candidates.
+  // Model TEE + GPU: EVERY candidate's checks count (any could have served the request).
+  // The summary below describes the candidate whose key signed the response.
   let chosen: CandidateResult[] = pre.candidates;
   if (sig?.signer) {
     const s = sig.signer;
@@ -333,10 +361,12 @@ export function evaluateBundle(
     );
     if (m.length > 0) chosen = m;
   }
-  const modelChecks: Check[] = chosen.length ? chosen.flatMap((c) => c.report.checks.checks) : [
+  const multi = pre.candidates.length > 1;
+  const tagged = (c: CandidateResult, xs: Check[]) => (multi ? xs.map((x) => ({ ...x, label: `[candidate ${c.index}] ${x.label}` })) : xs);
+  const modelChecks: Check[] = pre.candidates.length ? pre.candidates.flatMap((c) => tagged(c, c.report.checks.checks)) : [
     { id: 'model_report', label: 'Model attestation present', status: 'unavailable', detail: 'No model-TEE attestation candidates were returned.' },
   ];
-  const gpuChecks: Check[] = chosen.length ? chosen.flatMap((c) => c.gpu.checks.checks) : [
+  const gpuChecks: Check[] = pre.candidates.length ? pre.candidates.flatMap((c) => tagged(c, c.gpu.checks.checks)) : [
     { id: 'gpu_evidence', label: 'GPU evidence present', status: 'unavailable', detail: 'No model-TEE attestation candidates were returned.' },
   ];
   properties.push(prop('model_tee', 'Model runs in a genuine Intel TDX enclave',
@@ -383,6 +413,8 @@ export function evaluateBundle(
         ? {
             signing_address: pre.gateway.identity?.signing_address ?? null,
             signing_algo: pre.gateway.identity?.signing_algo ?? null,
+            app_id: pre.gateway.app?.app_id ?? null,
+            os_image_hash: pre.gateway.app?.os_image_hash ?? null,
             tls_spki_sha256: pre.gateway.tlsCertFingerprint,
             compose_hash: pre.gateway.composeHash,
             image_digests: pre.gateway.imageDigests,
@@ -396,6 +428,8 @@ export function evaluateBundle(
             candidates_verified: pre.verifiedModelSigners.length,
             signing_address: chosenOne.identity?.signing_address ?? null,
             signing_algo: chosenOne.identity?.signing_algo ?? null,
+            app_id: chosenOne.report.app?.app_id ?? null,
+            os_image_hash: chosenOne.report.app?.os_image_hash ?? null,
             compose_hash: chosenOne.report.composeHash,
             image_digests: chosenOne.report.imageDigests,
             quote: chosenOne.report.quote ? quoteFactsSummary(chosenOne.report.quote) : null,

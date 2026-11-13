@@ -18,7 +18,7 @@ Problem: an unpublished vulnerability report is the most sensitive document a se
 
 Product: PrivateTriage triages a report with an AI model on NEAR AI Cloud only after cryptographic proof of where that model runs. Per report it derives a fresh nonce from the request hash, fetches NEAR AI Cloud attestation over a pinned TLS connection, and verifies: the gateway's Intel TDX quote (DCAP, TCB, measured config, RTMR3); that the TLS key lives inside that enclave; the model's TDX quote; and NVIDIA's signed GPU confidential-computing verdict, all bound to the nonce. Only then is the report sent, on the same attested connection. The model enclave's provider_tee signature over SHA-256(request) and SHA-256(response) must come from the verified key. The UI shows a structured triage (CVSS recomputed from the vector, prompt injection flagged) beside a fail-closed receipt that separates what is proven from what is not (AI correctness, retention, end-to-end encryption).
 
-Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify offline byte-for-byte with no API key. 19 attacks on genuine evidence (edited verdict, replayed attestation, forged signer, TLS interception, forged NVIDIA token...) are all caught. External-provider models are refused before disclosure. 57 tests.
+Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify offline byte-for-byte with no API key. 21 attacks on genuine evidence (edited verdict, replayed attestation, forged signer, TLS interception, forged NVIDIA token...) are all caught. External-provider models are refused before disclosure. 66 tests.
 
 NEAR: NEAR AI Cloud private inference, TEE attestation and response-signature APIs (Privacy & Private AI track). Independent second project by the author of Pursewarden.
 ```
@@ -42,8 +42,8 @@ Record at 1440×900 with the system in dark mode. Run `npm run build && npm star
 | 25–40 s | Disclosure gate | Steps tick green. Pause on "Disclosure gate · Open — attestation verified first". | "Only when every check passes does the report leave, over the same TLS connection whose key sits inside the attested gateway." |
 | 40–55 s | AI analysis | Banner, then CVSS 9.6 critical. Hover "model stated 9.1; computed from its vector". | "The model enclave signs the exact request and response. The UI is honest: this proves where it ran, not that the AI is right. It even recomputes the CVSS the model got wrong." |
 | 55–65 s | Injection sample | Replay **Vague claim + prompt injection** and show the yellow injection card. | "This report tries to order the AI to rate it critical. It's flagged locally and by the model, and ignored." |
-| 65–80 s | Verification tab | Expand one property, then show "What it does not prove". | "Five properties, thirty-three checks, and an explicit list of what isn't proven: no retention claim, no end-to-end claim." |
-| 80–92 s | Tamper lab | Click **Run all**; 19/19 caught. Click "Analysis edited after signing", then **FAILED**. | "Edit the verdict, replay old attestation, forge a key, intercept TLS: every attack on genuine evidence fails closed." |
+| 65–80 s | Verification tab | Expand one property, then show "What it does not prove". | "Five properties, forty-two checks, and an explicit list of what isn't proven: no retention claim, no end-to-end claim." |
+| 80–92 s | Tamper lab | Click **Run all**; 21/21 caught. Click "Analysis edited after signing", then **FAILED**. | "Edit the verdict, replay old attestation, forge a key, intercept TLS: every attack on genuine evidence fails closed." |
 | 92–100 s | Fail closed | Show the refusal cards (gpt-5.4: "Report sent: no"). | "Models outside a TEE are refused before anything is sent." |
 | 100–105 s | Terminal | `npm run verify -- evidence/gate1/…/evidence.json --receipt …`, then `VERIFIED`, `receipt: MATCHES` | "And anyone can re-verify the evidence offline. PrivateTriage, on NEAR AI Cloud." |
 
@@ -81,7 +81,7 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 |---|---|
 | Gate 1: real inference, fresh nonce, attestation, signature bound to the request, response and model; machine-readable VERIFIED | ✅ `evidence/gate1/2026-11-13T16-12-38-022Z` |
 | Product: 3 fictional samples (one uncertain plus injection), structured triage, exports | ✅ |
-| Negative tests: tampering, signer mismatch, invalid quote, stale challenge, unavailable evidence, corrupted response, non-TEE model, malformed output, prompt injection | ✅ 57/57 |
+| Negative tests: tampering, signer mismatch, invalid quote, stale challenge, unavailable evidence, corrupted response, non-TEE model, malformed output, prompt injection | ✅ 66/66 |
 | Offline receipt reproduction (byte-identical) | ✅ `npm run verify` |
 | UI checked at desktop (1440) and mobile (390); no horizontal overflow; no console errors | ✅ |
 | Clean-checkout build (`git clone` → `npm ci` → typecheck → test → build) | ✅ (see PROJECT_HANDOFF) |

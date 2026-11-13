@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadApiKey } from '../server/env.ts';
 import { runConfidentialCompletion } from '../server/near/confidentialCompletion.ts';
+import { evaluateBundle } from '../server/verifier/evidence.ts';
 
 const args = process.argv.slice(2);
 const arg = (name: string, dflt: string) => {
@@ -55,8 +56,10 @@ result.bundle.completion &&
     request_b64: result.requestBytes.toString('base64'),
     response_b64: result.responseBytes?.toString('base64'),
   });
+// Receipt recomputed with the exact bytes attached = what offline verification reproduces.
+result.receipt = evaluateBundle(result.bundle).receipt;
 writeFileSync(join(dir, 'evidence.json'), JSON.stringify(result.bundle, null, 1));
-writeFileSync(join(dir, 'receipt.json'), JSON.stringify(result.receipt, null, 2));
+writeFileSync(join(dir, 'receipt.json'), JSON.stringify(result.receipt, null, 2) + '\n');
 writeFileSync(join(dir, 'request.bin'), result.requestBytes);
 if (result.responseBytes) writeFileSync(join(dir, 'response.bin'), result.responseBytes);
 

@@ -282,7 +282,7 @@ export function VerificationView({ receipt: r }: { receipt: Receipt }) {
             <I.ShieldCheck size={16} /> What a VERIFIED receipt proves
           </h4>
           <ul className="bullets">
-            <li>The NEAR AI Cloud gateway that terminated your TLS session runs measured software in a genuine, non-debug Intel TDX enclave with up-to-date platform firmware.</li>
+            <li>The NEAR AI Cloud gateway that terminated your TLS session runs NEAR’s pinned dstack OS image and app identity in a genuine, non-debug Intel TDX enclave with up-to-date platform firmware.</li>
             <li>The model was served from a separate Intel TDX enclave whose {m?.gpu?.count ?? ''} NVIDIA GPUs NVIDIA attests are in confidential-computing mode — both enclaves and the GPUs answered a challenge derived from your report.</li>
             <li>The model enclave’s attested key signed SHA-256 of the exact request and response, so the analysis you see is byte-for-byte what the enclave produced.</li>
             <li>Your report was released only after all of the above checked out.</li>
@@ -335,6 +335,12 @@ export function VerificationView({ receipt: r }: { receipt: Receipt }) {
             {g?.quote?.tcb_status ?? '—'} / {m?.quote?.tcb_status ?? '—'}
           </Fact>
           <Fact k="GPUs">{m?.gpu ? `${m.gpu.count} × ${m.gpu.arch ?? '?'} · NRAS token ${short(m.gpu.nras_jti, 6)}` : '—'}</Fact>
+          <Fact k="App identity (gateway / model)">
+            <CopyHash value={g?.app_id} n={6} /> <CopyHash value={m?.app_id} n={6} />
+          </Fact>
+          <Fact k="dstack OS image (gateway / model)">
+            <CopyHash value={g?.os_image_hash} n={6} /> <CopyHash value={m?.os_image_hash} n={6} />
+          </Fact>
           <Fact k="Model compose hash">
             <CopyHash value={m?.compose_hash} />
           </Fact>

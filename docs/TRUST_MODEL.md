@@ -15,11 +15,20 @@ This document states exactly what PrivateTriage verifies, how it verifies it, wh
 
 ## The five properties (all must pass for VERIFIED)
 
-1. **`gateway_tee`: the gateway runs in a genuine Intel TDX enclave.** Checks: `quote_verified` (DCAP chain to dcap-qvl's pinned Intel root, using Intel PCS collateral), `tcb_status` (only `UpToDate` accepted), `not_debug`, `signer_identity`, `signer_bound` (report_data[0:32] = SHA-256(signing address ‖ TLS SPKI fingerprint)), `nonce_bound` (report_data[32:64] = our nonce), `nonce_echo`, `report_data_echo`, `mrconfig` (MRCONFIGID = 01 ‖ SHA-256(app_compose)), and `rtmr3` (event-log replay).
-2. **`tls_binding`: the report was encrypted to the attested gateway.** Checks: `tls_spki` (peer certificate SPKI on the attestation socket = quote-bound fingerprint) and `same_connection` (the completion used that same socket; the HTTP agent is pinned to one socket).
-3. **`model_tee`: the model runs in a genuine Intel TDX enclave.** The same quote checks as the gateway, plus `model_name` (the report is for exactly the requested model).
-4. **`gpu_tee`: the model GPUs are in confidential-computing mode.** Checks: `gpu_evidence`, `gpu_nonce` (the NVIDIA payload answers our nonce), `nras_signature` (ES384 JWT verified with the NVIDIA JWKS, `kid` match, issuer, exp/nbf), `nras_nonce` (signed `eat_nonce` = our nonce) and `nras_verdict` (`x-nvidia-overall-att-result = true`).
+1. **`gateway_tee`: the gateway runs in a genuine Intel TDX enclave.** Checks: `quote_verified` (DCAP chain to dcap-qvl's pinned Intel root, using Intel PCS collateral), `tcb_status` (only `UpToDate` accepted), `not_debug`, `signer_identity`, `signer_bound` (report_data[0:32] = SHA-256(signing address ‖ TLS SPKI fingerprint)), `nonce_bound` (report_data[32:64] = our nonce), `nonce_echo`, `report_data_echo`, `mrconfig` (MRCONFIGID = 01 ‖ SHA-256(app_compose)), `rtmr3` (event-log replay), `compose_event` (the measured compose-hash event equals SHA-256(app_compose)), `os_image` (MRTD, RTMR1, RTMR2 and os-image-hash equal NEAR's pinned dstack OS image), and `app_identity` (app-id, KMS measurement and key provider equal NEAR's pinned app). See "Workload pinning" below.
+2. **`tls_binding`: the report was encrypted to the attested gateway.** Checks: `tls_spki` (peer certificate SPKI on the attestation socket = quote-bound fingerprint) and `same_connection` (the completion used that same socket).
+   - Live, the request is **pinned** to that socket: nothing is written (not even the Authorization header) unless Node assigns exactly the attested socket with the attested certificate key. If the gateway closed the idle connection during appraisal, the report is not sent.
+   - Offline, these two observations are as recorded by the capturing backend. They are checked against the quote, but cannot be re-observed. Every receipt states this.
+3. **`model_tee`: the model runs in a genuine Intel TDX enclave.** The same quote and workload checks as the gateway, plus `model_name` (the report must name exactly the requested model; a missing name fails). **Every** candidate the gateway returns must verify before anything is sent, because any of them could serve the request. All candidates' checks appear in the receipt.
+4. **`gpu_tee`: the model GPUs are in confidential-computing mode.** Checks:
+   - `gpu_evidence`: at least one GPU evidence entry.
+   - `gpu_nonce`: the NVIDIA payload answers our nonce.
+   - `nras_signature`: an ES384 JWT whose P-384 key must be certified (x5c leaf signed by, and valid under) one of two **pinned NVIDIA attestation intermediate CAs**, and must equal that certificate's key. The `kid`, issuer, `exp`, `iat` and `nbf` are also checked.
+   - `time_anchor`: the evaluation time is within 10 minutes of NVIDIA's signed `iat`.
+   - `nras_nonce`: the signed `eat_nonce` equals our nonce.
+   - `nras_verdict`: `x-nvidia-overall-att-result = true`.
 5. **`response_signature`: the analysis was signed inside the model enclave.** Checks:
+   - `capture_time`: the displayed capture time is the evaluated time.
    - `nonce_derivation`: nonce = SHA-256(domain ‖ salt ‖ request hash).
    - `request_bound`: the signed request is the challenged request.
    - `request_bytes` and `response_bytes`: any included bytes hash to the signed hashes.
@@ -62,6 +71,36 @@ Notes:
 - Evaluation happens *as of* `captured_at_secs`, because collateral and tokens expire. An offline verifier therefore checks internal consistency and cryptographic validity; freshness is meaningful to whoever chose the salt at capture time.
 - The verifier **ignores the policy recorded in a bundle** and applies its own (TCB `UpToDate` only, `provider_tee` signer). This is tested: a bundle that relaxes its own policy still fails.
 - `@phala/dcap-qvl` verifies the PCK chain archived in the collateral against its **pinned Intel root**. The quote's embedded PEM chain is transport only, so flipping bytes in that embedded copy does not change the result. Every signed region (header, TD report body, report_data, quote signature, QE report) rejects a single-bit flip. This was checked with a byte-flip probe during development.
+
+## Workload pinning (which software, not just which hardware)
+
+A genuine, up-to-date TDX quote only proves that *some* TDX guest produced it. PrivateTriage additionally requires NEAR AI Cloud's own workload. The pins are in `server/verifier/measurements.ts`.
+
+- **OS image:** MRTD (TD firmware), RTMR1 (kernel) and RTMR2 (kernel command line + initrd). These are measured by the TDX module and firmware, not by the guest. One profile is pinned for gateway nodes and one for GPU model nodes. RTMR0 (virtual hardware shape) is shown but not pinned.
+- **App identity:** the dstack `app-id`, the KMS measurement `mr-kms` and the KMS key provider. All are authenticated by the RTMR3 replay. The app-id stayed constant when NEAR redeployed the gateway compose during 2026-11-13 (`988522…` → `b73eed…`), so routine NEAR releases keep verifying, while a foreign guest or foreign app does not. One model-serving app-id covers both models used.
+- The values were **pinned on first observation** (2026-11-13) and cross-checked across 22 genuine reports.
+- An unknown value yields **UNVERIFIED and blocks disclosure**. `npm run pin` (free; attestation only) shows the current values next to the pinned ones, so a human can review a new NEAR release before adding it.
+- Compose hashes and container image digests are displayed but are not an allowlist. App-id governance (which composes NEAR's KMS will serve) is NEAR's responsibility.
+
+## Independent review (2026-11-13)
+
+A separate reviewer audited the verifier and backend with the code only (no conclusions supplied). Findings and fixes:
+
+| # | Finding | Fix | Regression test |
+|---|---|---|---|
+| 1 | Offline GPU-verdict forgery: the NVIDIA JWKS came from the bundle and was not tied to NVIDIA. An empty GPU evidence list was also accepted. | The key must be certified by a pinned NVIDIA intermediate CA and equal its certificate; P-384, `kid`, `exp` and `iat` are required; an empty evidence list fails. | tamper `nras_self_certified` |
+| 2 | The report could be sent when one model candidate failed, and that candidate was hidden from the receipt. | Every candidate must verify before disclosure; all candidates' checks are shown. | "a second model candidate that fails blocks disclosure" |
+| 3 | The report and API key could go out on a silently re-opened TLS connection. | Socket pinning before any byte is written. | `test/connection.test.ts` (local TLS server drops the idle socket) |
+| 4 | A missing `model_name` skipped the model check. | A missing name fails. | "a model report that does not name its model fails" |
+| 5 | No workload-measurement policy, so any TDX guest passed. | OS image and app identity are pinned (above). | "a genuine TDX guest that is not NEAR's pinned OS image or app is UNVERIFIED" |
+| 6 | The bundle chose its own verification time. | Time is anchored to the NVIDIA-signed `iat` (±10 min), and the displayed time must equal the evaluated time. Collateral itself is still the archived copy (see limits). | "a bundle that moves its own capture time…" |
+| 7 | Offline TLS binding rests on recorded observations. | Stated in every receipt's TLS property. | n/a (disclosure) |
+| — | Backend: a spend-guard race, unthrottled preflight, and CPU cost on `/api/verify`. | Slots are claimed before reading the body; preflight is serialized and capped; body limits apply; at most 8 model candidates per bundle. | — |
+
+**Remaining limits from the review:**
+- Offline verification uses the collateral archived in the bundle, so revocation is checked as of capture time.
+- The TLS-binding observations are backend-recorded.
+- Measurements are pinned on first use rather than derived from reproducible builds.
 
 ## Trust assumptions
 

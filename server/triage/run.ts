@@ -1,7 +1,7 @@
 // One confidential triage: hygiene scan → attest → (gated) disclose → verify → interpret.
 import { type HygieneFinding, scanReport } from '../../shared/hygiene.ts';
 import { runConfidentialCompletion, type Stage } from '../near/confidentialCompletion.ts';
-import type { EvidenceBundle, Receipt } from '../verifier/evidence.ts';
+import { evaluateBundle, type EvidenceBundle, type Receipt } from '../verifier/evidence.ts';
 import { buildTriageRequest, DEFAULT_MODEL, interpretResponse, type TriageOutcome } from './triage.ts';
 
 export interface StageEvent {
@@ -50,12 +50,15 @@ export async function runTriage(opts: {
     if (result.responseBytes) c.response_b64 = result.responseBytes.toString('base64');
   }
   const outcome = c ? interpretResponse(c.status, result.responseBytes) : null;
+  // Re-evaluate with the exact bytes attached, so the returned receipt is exactly
+  // what offline re-verification of this evidence bundle will reproduce.
+  const { receipt } = evaluateBundle(result.bundle);
   return {
     model,
     marker: req.marker,
     hygiene,
     stages,
-    receipt: result.receipt,
+    receipt,
     outcome,
     evidence: result.bundle,
     duration_ms: Date.now() - t0,

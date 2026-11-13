@@ -16,7 +16,8 @@
     "build": "node scripts/build-demo.ts && vite build web",
     "dev": "vite web",
     "start": "node server/app.ts",
-    "demo:data": "node scripts/build-demo.ts"
+    "demo:data": "node scripts/build-demo.ts",
+    "pin": "node scripts/pin.ts"
   },
   "dependencies": {
     "@phala/dcap-qvl": "0.7.0",

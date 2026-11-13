@@ -4,13 +4,15 @@
 // source of truth; HTTP fields are only compared against it.
 import { EvidenceError, hexToBytes, isRecord, jsonOrValue, sameBytes, sha256, sha384, toHex } from './bytes.ts';
 import { type Collateral, type QuoteFacts, verifyQuote } from './tdx.ts';
+import { type MeasurementPolicy, PINNED_MEASUREMENTS, type Role } from './measurements.ts';
 import { CheckList, type SignerIdentity } from './types.ts';
 
 export interface ReportPolicy {
   acceptedTcbStatuses: string[];
+  measurements: MeasurementPolicy;
 }
 
-export const DEFAULT_POLICY: ReportPolicy = { acceptedTcbStatuses: ['UpToDate'] };
+export const DEFAULT_POLICY: ReportPolicy = { acceptedTcbStatuses: ['UpToDate'], measurements: PINNED_MEASUREMENTS };
 
 export interface ReportCheckInput {
   report: unknown;
@@ -18,6 +20,8 @@ export interface ReportCheckInput {
   collateral: Collateral | null;
   nowSecs: number;
   policy?: ReportPolicy;
+  /** Which NEAR workload this report must be (gateway or model server). */
+  role: Role;
   /** SHA-256 of the peer certificate SPKI observed on the SAME TLS connection (gateway only). */
   peerSpkiSha256?: string;
 }
@@ -30,13 +34,17 @@ export interface ReportCheckResult {
   appCompose: string | null;
   imageDigests: string[];
   tlsCertFingerprint: string | null;
+  /** Authenticated (RTMR3-replayed) dstack app events. */
+  app: { app_id: string | null; os_image_hash: string | null } | null;
 }
 
 const IDENTITY_BYTES = { ecdsa: 20, ed25519: 32 } as const;
 
-export function replayRtmr3(eventLog: unknown): Buffer {
+/** Replays IMR-3 events; returns the register value and the event payloads by name. */
+export function replayRtmr3(eventLog: unknown): { rtmr3: Buffer; events: Map<string, string> } {
   const events = jsonOrValue(eventLog, 'event_log');
   if (!Array.isArray(events)) throw new EvidenceError('malformed', 'event_log is not a list');
+  const named = new Map<string, string>();
   let rtmr3: Buffer = Buffer.alloc(48);
   for (const ev of events) {
     if (!isRecord(ev)) throw new EvidenceError('malformed', 'event_log entry is not an object');
@@ -54,8 +62,10 @@ export function replayRtmr3(eventLog: unknown): Buffer {
       }
     }
     rtmr3 = sha384(rtmr3, digest);
+    if (named.has(ev.event)) named.set(ev.event, '\u0000duplicate');
+    else named.set(ev.event, toHex(payload));
   }
-  return rtmr3;
+  return { rtmr3, events: named };
 }
 
 export function extractImageDigests(appCompose: string): string[] {
@@ -84,6 +94,7 @@ export function checkNearReport(input: ReportCheckInput): ReportCheckResult {
     appCompose: null,
     imageDigests: [],
     tlsCertFingerprint: null,
+    app: null,
   };
   const r = input.report;
   if (!isRecord(r)) {
@@ -217,21 +228,71 @@ export function checkNearReport(input: ReportCheckInput): ReportCheckResult {
     c.fail('mrconfig', 'Measured config matches app_compose', (e as Error).message);
   }
 
-  // 5. RTMR3 event-log replay.
+  // 5. RTMR3 event-log replay: authenticates the logged app events.
+  let events: Map<string, string> | null = null;
   try {
-    const replayed = replayRtmr3(r.event_log);
-    c.expect(
-      sameBytes(replayed, q.rtMr3),
-      'rtmr3',
-      'Event log replays to RTMR3',
-      'Replaying IMR-3 events reproduces the quote RTMR3 (app-id, compose-hash, key-provider authenticated).',
-      'Replayed event log does not match quote RTMR3.',
-    );
+    const replay = replayRtmr3(r.event_log);
+    if (
+      c.expect(
+        sameBytes(replay.rtmr3, q.rtMr3),
+        'rtmr3',
+        'Event log replays to RTMR3',
+        'Replaying the IMR-3 event log reproduces the quote’s RTMR3, so the logged app events are the measured ones.',
+        'Replayed event log does not match quote RTMR3.',
+      )
+    ) {
+      events = replay.events;
+    }
   } catch (e) {
     c.fail('rtmr3', 'Event log replays to RTMR3', (e as Error).message);
   }
+  if (events) result.app = { app_id: events.get('app-id') ?? null, os_image_hash: events.get('os-image-hash') ?? null };
+  if (events && result.composeHash) {
+    c.expect(
+      events.get('compose-hash') === result.composeHash,
+      'compose_event',
+      'Measured compose-hash event matches app_compose',
+      'RTMR3 compose-hash event = SHA-256(app_compose) = MRCONFIGID payload.',
+      'RTMR3 compose-hash event differs from SHA-256(app_compose).',
+    );
+  }
 
-  // 6. Optional same-connection TLS binding (gateway).
+  // 6. Workload policy: NEAR's pinned dstack OS image and app identity.
+  const pol = policy.measurements;
+  const hex = (b: Buffer) => toHex(b);
+  const os = pol.os.find(
+    (p) => p.role === input.role && p.mrtd === hex(q.mrTd) && p.rtmr1 === hex(q.rtMr1) && p.rtmr2 === hex(q.rtMr2) && (events === null || events.get('os-image-hash') === p.os_image_hash),
+  );
+  if (os) c.pass('os_image', 'Pinned NEAR dstack OS image', `${os.name}: MRTD, RTMR1, RTMR2 and os-image-hash match.`);
+  else
+    c.unavailable(
+      'os_image',
+      'Pinned NEAR dstack OS image',
+      `Unrecognized ${input.role} OS measurements (MRTD ${hex(q.mrTd).slice(0, 16)}…, RTMR2 ${hex(q.rtMr2).slice(0, 16)}…). Not in the pinned list; review with \`npm run pin\`.`,
+    );
+  if (events) {
+    const appId = events.get('app-id') ?? '';
+    const app = pol.apps.find((a) => a.role === input.role && a.app_id === appId);
+    const kms = pol.mr_kms.includes(events.get('mr-kms') ?? '');
+    let provider = '';
+    try {
+      provider = Buffer.from(events.get('key-provider') ?? '', 'hex').toString('utf8');
+    } catch {
+      provider = '';
+    }
+    const kp = pol.key_providers.includes(provider);
+    if (app && kms && kp) c.pass('app_identity', 'Pinned NEAR app identity', `${app.name}: app-id ${appId.slice(0, 12)}…, KMS and key provider match.`);
+    else
+      c.unavailable(
+        'app_identity',
+        'Pinned NEAR app identity',
+        `${!app ? `Unrecognized ${input.role} app-id ${appId.slice(0, 12) || '(none)'}…. ` : ''}${!kms ? 'Unrecognized KMS measurement. ' : ''}${!kp ? 'Unrecognized key provider. ' : ''}Review with \`npm run pin\`.`,
+      );
+  } else {
+    c.unavailable('app_identity', 'Pinned NEAR app identity', 'App events not authenticated (event log did not replay).');
+  }
+
+  // 7. Optional same-connection TLS binding (gateway).
   if (input.peerSpkiSha256 !== undefined) {
     const ok = fp !== null && signerBound && fp.toString('hex') === input.peerSpkiSha256.toLowerCase();
     if (fp === null) {

@@ -35,6 +35,9 @@ const allowedHosts = new Set([
 
 let runsStarted = 0;
 let inFlight = false;
+let preflightsStarted = 0;
+let preflightInFlight = false;
+const MAX_PREFLIGHTS = 100;
 
 const SECURITY_HEADERS: Record<string, string> = {
   'Content-Security-Policy':
@@ -139,16 +142,32 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     if (!apiKey) return send(res, 503, { error: 'No NEAR AI Cloud API key is configured on this backend. Guided demo only.' });
     if (runsStarted >= MAX_RUNS) return send(res, 429, { error: 'Run limit for this backend process reached (spend guard).' });
     if (inFlight) return send(res, 429, { error: 'Another triage is in progress. Try again in a few seconds.' });
-    const body = (await readJson(req, 128 * 1024)) as Record<string, unknown>;
-    const title = typeof body.title === 'string' ? body.title.trim() : '';
-    const report = typeof body.body === 'string' ? body.body : '';
-    const model = typeof body.model === 'string' ? body.model : DEFAULT_MODEL;
-    if (!title || title.length > MAX_TITLE_CHARS) return send(res, 400, { error: `Title is required (max ${MAX_TITLE_CHARS} characters).` });
-    if (report.trim().length < 40 || report.length > MAX_REPORT_CHARS)
-      return send(res, 400, { error: `Report must be 40–${MAX_REPORT_CHARS} characters.` });
-    if (!TRIAGE_MODELS.includes(model)) return send(res, 400, { error: 'Model is not on the confidential triage allowlist.' });
-
+    // Claim the slot BEFORE awaiting the body, so concurrent requests cannot race past the guard.
     inFlight = true;
+    let title = '';
+    let report = '';
+    let model = DEFAULT_MODEL;
+    try {
+      const body = (await readJson(req, 128 * 1024)) as Record<string, unknown>;
+      title = typeof body.title === 'string' ? body.title.trim() : '';
+      report = typeof body.body === 'string' ? body.body : '';
+      model = typeof body.model === 'string' ? body.model : DEFAULT_MODEL;
+    } catch (e) {
+      inFlight = false;
+      throw e;
+    }
+    const invalid =
+      !title || title.length > MAX_TITLE_CHARS
+        ? `Title is required (max ${MAX_TITLE_CHARS} characters).`
+        : report.trim().length < 40 || report.length > MAX_REPORT_CHARS
+          ? `Report must be 40–${MAX_REPORT_CHARS} characters.`
+          : !TRIAGE_MODELS.includes(model)
+            ? 'Model is not on the confidential triage allowlist.'
+            : null;
+    if (invalid) {
+      inFlight = false;
+      return send(res, 400, { error: invalid });
+    }
     runsStarted++;
     res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
     const emit = (o: unknown) => res.write(JSON.stringify(o) + '\n');
@@ -169,21 +188,29 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (req.method === 'POST' && path === '/api/preflight') {
-    // Attestation only. No API key is used and no report is sent; free to run.
-    const body = (await readJson(req, 4 * 1024)) as Record<string, unknown>;
-    const model = typeof body.model === 'string' ? body.model : '';
-    if (!/^[A-Za-z0-9._/-]{1,100}$/.test(model)) return send(res, 400, { error: 'Invalid model id.' });
-    const r = await runConfidentialCompletion({
-      apiKey: '',
-      model,
-      requestBody: Buffer.from(JSON.stringify({ model, messages: [{ role: 'user', content: 'preflight (never sent)' }] })),
-      preflightOnly: true,
-    });
-    return send(res, 200, { receipt: r.receipt, blocked_reason: r.bundle.blocked_reason ?? null });
+    // Attestation only. No API key is used and no report is sent; free to run, but
+    // each call fans out to NEAR, Intel PCS and NVIDIA, so it is serialized and capped.
+    if (preflightInFlight || preflightsStarted >= MAX_PREFLIGHTS) return send(res, 429, { error: 'Preflight busy or limit reached.' });
+    preflightInFlight = true;
+    preflightsStarted++;
+    try {
+      const body = (await readJson(req, 4 * 1024)) as Record<string, unknown>;
+      const model = typeof body.model === 'string' ? body.model : '';
+      if (!/^[A-Za-z0-9._/-]{1,100}$/.test(model)) return send(res, 400, { error: 'Invalid model id.' });
+      const r = await runConfidentialCompletion({
+        apiKey: '',
+        model,
+        requestBody: Buffer.from(JSON.stringify({ model, messages: [{ role: 'user', content: 'preflight (never sent)' }] })),
+        preflightOnly: true,
+      });
+      return send(res, 200, { receipt: r.receipt, blocked_reason: r.bundle.blocked_reason ?? null });
+    } finally {
+      preflightInFlight = false;
+    }
   }
 
   if (req.method === 'POST' && path === '/api/verify') {
-    const body = await readJson(req, 16 * 1024 * 1024);
+    const body = await readJson(req, 6 * 1024 * 1024);
     if (!isBundle(body)) return send(res, 400, { error: 'Not a privatetriage.evidence/v1 bundle.' });
     try {
       return send(res, 200, { receipt: evaluateBundle(body).receipt });
@@ -193,7 +220,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (req.method === 'POST' && path === '/api/tamper') {
-    const body = (await readJson(req, 16 * 1024 * 1024)) as Record<string, unknown>;
+    const body = (await readJson(req, 12 * 1024 * 1024)) as Record<string, unknown>;
     const s = SCENARIOS.find((x) => x.id === body.scenario);
     if (!s || !isBundle(body.evidence) || !isBundle(body.other)) return send(res, 400, { error: 'Unknown scenario or invalid bundles.' });
     try {
