@@ -47,7 +47,8 @@ export function triageMarkdown(run: TriageRun, title: string): string {
   }
   const computed = t.cvss_v31_vector ? cvss31(t.cvss_v31_vector) : null;
   L.push('| | |', '|---|---|');
-  L.push(`| Severity | **${t.severity}** |`);
+  const band = computed ? (computed.severity === 'none' ? 'informational' : computed.severity) : t.severity;
+  L.push(`| Severity | **${band}**${computed && band !== t.severity ? ` (recomputed from the vector; model said ${t.severity})` : ''} |`);
   L.push(`| CVSS 3.1 | ${t.cvss_v31_vector ? `\`${t.cvss_v31_vector}\` — ${computed ? computed.score.toFixed(1) : 'invalid vector'} (computed)${t.cvss_v31_score !== null && computed && Math.abs(computed.score - t.cvss_v31_score) >= 0.05 ? `; model stated ${t.cvss_v31_score}` : ''}` : 'not scored'} |`);
   L.push(`| Validity | ${t.validity.replace(/_/g, ' ')} |`);
   L.push(`| Confidence | ${t.confidence} — ${t.confidence_rationale} |`);

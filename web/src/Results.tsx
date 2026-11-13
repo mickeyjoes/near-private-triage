@@ -56,15 +56,18 @@ const PROP_SHORT: Record<string, string> = {
 function CvssBlock({ t }: { t: Triage }) {
   const c = t.cvss_v31_vector ? cvss31(t.cvss_v31_vector) : null;
   const mismatch = c && t.cvss_v31_score !== null && Math.abs(c.score - t.cvss_v31_score) >= 0.05;
+  // Both the number and the band come from the vector; the model's own label is shown if it differs.
+  const band = c ? (c.severity === 'none' ? 'informational' : c.severity) : t.severity;
+  const sevDiffers = c !== null && band !== t.severity;
   return (
-    <div className={`cvss sev-${SEV_TONE[t.severity]}`}>
+    <div className={`cvss sev-${SEV_TONE[band] ?? 'undet'}`}>
       <div className="cvss-score">{c ? c.score.toFixed(1) : '—'}</div>
       <div className="cvss-meta">
-        <div className="cvss-sev">{t.severity}</div>
+        <div className="cvss-sev">{band}</div>
         <div className="cvss-vec">{t.cvss_v31_vector ?? 'Not scored — insufficient evidence'}</div>
-        {mismatch ? (
+        {mismatch || sevDiffers ? (
           <div className="cvss-note">
-            <I.Alert size={12} /> model stated {t.cvss_v31_score?.toFixed(1)}; computed from its vector
+            <I.Alert size={12} /> model said {[mismatch ? t.cvss_v31_score?.toFixed(1) : null, sevDiffers ? `“${t.severity}”` : null].filter(Boolean).join(' / ')}; recomputed from its vector
           </div>
         ) : c ? (
           <div className="cvss-note ok">

@@ -45,6 +45,13 @@ function deriveStates(stages: StageEvent[], receipt: Receipt | null, running: bo
     st[4] = 'done';
     st[5] = 'active';
   }
+  if (seen.has('verdict') && !receipt) {
+    // Verdict computed server-side; receipt still in flight. Never show a premature failure.
+    if (st[4] === 'active') st[4] = 'done';
+    st[5] = 'active';
+    st[6] = 'active';
+    return st;
+  }
   if (seen.has('verdict')) {
     if (st[4] === 'active') st[4] = receipt?.disclosed ? 'done' : 'failed';
     st[5] = prop('response_signature') === 'VERIFIED' ? 'done' : 'failed';

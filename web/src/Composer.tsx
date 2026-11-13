@@ -101,6 +101,7 @@ export function Composer(p: ComposerProps) {
           <span className="meta-item">≈ {tokens.toLocaleString()} input tokens</span>
           <span className="meta-item">≈ $0.006 / triage</span>
         </div>
+        <div className="foot-actions">
         {p.live && p.canReplay ? (
           <button type="button" className="btn btn-ghost" onClick={p.onReplay} disabled={p.running} title="Replay the recorded genuine run of this sample (no inference cost)">
             <I.Play size={15} /> Replay recorded
@@ -110,6 +111,7 @@ export function Composer(p: ComposerProps) {
           {p.running ? <span className="spinner light" /> : p.live ? <I.Lock size={16} /> : <I.Play size={16} />}
           {p.running ? 'Verifying…' : p.live ? 'Attest & triage' : 'Replay verified run'}
         </button>
+        </div>
       </div>
     </div>
   );

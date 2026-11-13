@@ -195,7 +195,7 @@ export function App() {
           </div>
           <div className="hero-proof">
             <div className="hp">
-              <span className="hp-k">Gate 1 · live, {new Date(g1.captured_at).toUTCString().slice(5, 22)} UTC</span>
+              <span className="hp-k">Gate 1 · recorded real run, {new Date(g1.captured_at).toUTCString().slice(5, 22)} UTC</span>
               <span className="hp-v">
                 <I.ShieldCheck size={15} /> 5 / 5 properties verified · {g1.properties.reduce((n, p) => n + p.checks.length, 0)} checks
               </span>

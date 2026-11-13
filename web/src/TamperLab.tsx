@@ -28,6 +28,7 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
       }
       setSel(r.id);
       setRevealed((s) => new Set(s).add(r.id));
+      document.getElementById(`lab-${r.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       i++;
       timer.current = window.setTimeout(tick, 420);
     };
@@ -39,8 +40,8 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
 
   const r = results.find((x) => x.id === sel);
   const caught = results.filter((x) => revealed.has(x.id) && x.verdict !== 'VERIFIED').length;
-  const failed = results.filter((x) => x.verdict === 'FAILED').length;
-  const unver = results.filter((x) => x.verdict === 'UNVERIFIED').length;
+  const failed = results.filter((x) => revealed.has(x.id) && x.verdict === 'FAILED').length;
+  const unver = results.filter((x) => revealed.has(x.id) && x.verdict === 'UNVERIFIED').length;
   const target = r?.properties.find((p) => p.id === r.property);
   const hit = target?.checks.find((c) => c.id === r?.check);
 
@@ -71,7 +72,7 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
           </div>
           <ul>
             {results.map((x) => (
-              <li key={x.id}>
+              <li key={x.id} id={`lab-${x.id}`}>
                 <button
                   type="button"
                   className={`lab-item ${sel === x.id ? 'on' : ''}`}
