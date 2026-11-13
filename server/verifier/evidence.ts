@@ -318,6 +318,8 @@ export function evaluateBundle(
       model: b.model,
       requiredKind: 'provider_tee',
       verifiedModelSigners: pre.verifiedModelSigners,
+      modelEvidenceAvailable: pre.candidates.length > 0,
+      pendingModelSigners: pre.candidates.filter((c) => c.verdict === 'UNVERIFIED' && c.identity).map((c) => c.identity!),
       verifiedGatewaySigner: pre.gateway?.identity ?? null,
     });
   }

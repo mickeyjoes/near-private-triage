@@ -7,7 +7,13 @@
   "engines": {
     "node": ">=24"
   },
-  "scripts": {},
+  "scripts": {
+    "test": "node --test test/",
+    "typecheck": "tsc -p .",
+    "gate1": "node scripts/gate1.ts",
+    "verify": "node scripts/verify-bundle.ts",
+    "record": "node scripts/record-samples.ts"
+  },
   "dependencies": {
     "@phala/dcap-qvl": "0.7.0",
     "ethers": "6.17.0",

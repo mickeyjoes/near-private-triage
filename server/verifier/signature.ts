@@ -20,6 +20,10 @@ export interface SignatureCheckInput {
   requiredKind: SignatureKind;
   /** Verified preflight identities. */
   verifiedModelSigners: SignerIdentity[];
+  /** Identities of model reports whose evidence is incomplete (UNVERIFIED, not FAILED). */
+  pendingModelSigners?: SignerIdentity[];
+  /** False when no model attestation exists at all: the signer cannot be compared, only not confirmed. */
+  modelEvidenceAvailable?: boolean;
   verifiedGatewaySigner: SignerIdentity | null;
 }
 
@@ -124,6 +128,18 @@ export function checkResponseSignature(input: SignatureCheckInput): SignatureChe
   // Signer must match exactly one VERIFIED preflight report of the right kind.
   if (kind === 'provider_tee') {
     const matches = input.verifiedModelSigners.filter((m) => sameIdentity(m, signer));
+    if (matches.length === 0 && input.modelEvidenceAvailable === false) {
+      c.unavailable('signer_attested', 'Signer key is bound to attested hardware', 'No model attestation is available to vouch for this signing key.');
+      return out;
+    }
+    if (matches.length === 0 && (input.pendingModelSigners ?? []).some((m) => sameIdentity(m, signer))) {
+      c.unavailable(
+        'signer_attested',
+        'Signer key is bound to attested hardware',
+        'Signer matches a model report whose hardware evidence is incomplete; it cannot be confirmed.',
+      );
+      return out;
+    }
     c.expect(
       matches.length === 1,
       'signer_attested',
