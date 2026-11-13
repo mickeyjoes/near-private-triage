@@ -1,5 +1,6 @@
 {
   "schema": "privatetriage.receipt/v1",
+  "verifier": "privatetriage-verifier/1 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS)",
   "verdict": "UNVERIFIED",
   "headline": "Not verified: Analysis was signed inside the model enclave.",
   "captured_at": "2026-11-13T03:16:11.265Z",
@@ -196,7 +197,7 @@
     {
       "id": "response_signature",
       "title": "Analysis was signed inside the model enclave",
-      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for.",
+      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.",
       "checks": [
         {
           "id": "signature_present",

@@ -1,5 +1,6 @@
 {
   "schema": "privatetriage.receipt/v1",
+  "verifier": "privatetriage-verifier/1 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS)",
   "verdict": "VERIFIED",
   "headline": "Confidential execution verified: attested gateway and GPU-backed model TEE, response signed in the model enclave.",
   "captured_at": "2026-11-13T16:11:49.269Z",
@@ -200,8 +201,32 @@
     {
       "id": "response_signature",
       "title": "Analysis was signed inside the model enclave",
-      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for.",
+      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.",
       "checks": [
+        {
+          "id": "nonce_derivation",
+          "label": "Challenge was derived from this request",
+          "status": "pass",
+          "detail": "nonce = SHA-256(domain ‖ salt ‖ request hash) recomputes to 6b9a111bedcbb4e6…"
+        },
+        {
+          "id": "request_bound",
+          "label": "Signed request is the challenged request",
+          "status": "pass",
+          "detail": "The request hash covered by the signature is the one the attestation challenge was derived from."
+        },
+        {
+          "id": "request_bytes",
+          "label": "Included request bytes match the signed hash",
+          "status": "pass",
+          "detail": "SHA-256 of the included request bytes equals the signed request hash."
+        },
+        {
+          "id": "response_bytes",
+          "label": "Included response bytes match the signed hash",
+          "status": "pass",
+          "detail": "SHA-256 of the included response bytes equals the signed response hash."
+        },
         {
           "id": "signature_present",
           "label": "Response signature available",

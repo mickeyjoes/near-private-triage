@@ -23,6 +23,7 @@ import {
 } from './types.ts';
 
 export const NONCE_DOMAIN = 'privatetriage/attestation-nonce/v1';
+export const VERIFIER_ID = 'privatetriage-verifier/1 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS)';
 
 /** nonce = SHA-256(domain ‖ salt ‖ SHA-256(request bytes)). Uniformly random given a random salt,
  * and lets anyone holding the receipt confirm the attestation challenge was derived from THIS request. */
@@ -54,6 +55,8 @@ export interface EvidenceBundle {
   collateral: Record<string, Collateral | null>;
   /** NRAS result per model candidate index. */
   nras: Record<string, NrasEvidence | null>;
+  /** Why NRAS evidence is missing for a candidate (diagnostic only). */
+  nras_errors?: Record<string, string>;
   completion: {
     status: number;
     request_sha256: string;
@@ -91,6 +94,15 @@ export interface PreflightResult {
 
 export const quoteKey = (quoteHex: string): string => sha256Hex(quoteHex);
 
+/** A short, sanitized provider error message (public attestation endpoint; no secrets). */
+function providerMessage(body: string | undefined): string {
+  if (!body) return '';
+  const j = parseJson(body);
+  const msg = isRecord(j) && isRecord(j.error) && typeof j.error.message === 'string' ? j.error.message : isRecord(j) && typeof j.detail === 'string' ? j.detail : '';
+  const clean = msg.replace(/[^\x20-\x7e]/g, '').slice(0, 160);
+  return clean ? `: “${clean}”` : '';
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -99,7 +111,8 @@ function parseJson(text: string): unknown {
   }
 }
 
-export function evaluatePreflight(b: EvidenceBundle): PreflightResult {
+/** `policy` is the VERIFIER's policy. A bundle's own recorded policy is informational only and is never trusted. */
+export function evaluatePreflight(b: EvidenceBundle, policy: ReportPolicy = DEFAULT_POLICY): PreflightResult {
   const empty: PreflightResult = {
     gateway: null,
     gatewayVerdict: 'UNVERIFIED',
@@ -110,7 +123,7 @@ export function evaluatePreflight(b: EvidenceBundle): PreflightResult {
     attestationError: null,
   };
   if (!b.attestation || b.attestation.status !== 200) {
-    empty.reason = `Attestation report unavailable (HTTP ${b.attestation?.status ?? 'n/a'}).`;
+    empty.reason = `Attestation report unavailable (HTTP ${b.attestation?.status ?? 'n/a'})${providerMessage(b.attestation?.body)}.`;
     empty.attestationError = { id: 'report_present', label: 'Attestation report present', status: 'unavailable', detail: empty.reason };
     return empty;
   }
@@ -128,7 +141,7 @@ export function evaluatePreflight(b: EvidenceBundle): PreflightResult {
     nonceHex: b.nonce.value,
     collateral: collateralFor(att.gateway_attestation),
     nowSecs: b.captured_at_secs,
-    policy: b.policy,
+    policy,
     peerSpkiSha256: b.attestation.peer_spki_sha256 ?? undefined,
   });
   // tls_spki is evaluated as part of the TLS-binding property, not the gateway TEE property.
@@ -143,12 +156,12 @@ export function evaluatePreflight(b: EvidenceBundle): PreflightResult {
       nonceHex: b.nonce.value,
       collateral: collateralFor(rep),
       nowSecs: b.captured_at_secs,
-      policy: b.policy,
+      policy,
     });
     if (isRecord(rep) && typeof rep.model_name === 'string' && rep.model_name !== b.model) {
       report.checks.fail('model_name', 'Report is for the requested model', `Report is for ${rep.model_name}, not ${b.model}.`);
     }
-    const gpu = checkGpuEvidence(isRecord(rep) ? rep.nvidia_payload : undefined, b.nonce.value, b.nras[String(index)] ?? null, b.captured_at_secs);
+    const gpu = checkGpuEvidence(isRecord(rep) ? rep.nvidia_payload : undefined, b.nonce.value, b.nras[String(index)] ?? null, b.captured_at_secs, b.nras_errors?.[String(index)]);
     const verdict = verdictOf([...report.checks.checks, ...gpu.checks.checks]);
     candidates.push({ index, report, gpu, verdict, identity: report.identity });
   });
@@ -165,6 +178,7 @@ export function evaluatePreflight(b: EvidenceBundle): PreflightResult {
 
 export interface Receipt {
   schema: 'privatetriage.receipt/v1';
+  verifier: string;
   verdict: Verdict;
   headline: string;
   captured_at: string;
@@ -208,8 +222,64 @@ export interface CompletionFacts {
   chatId: string | null;
 }
 
-export function evaluateBundle(b: EvidenceBundle): { receipt: Receipt; preflight: PreflightResult; signature: SignatureCheckResult | null } {
-  const pre = evaluatePreflight(b);
+function b64Bytes(v: unknown): Buffer | null {
+  if (typeof v !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(v)) return null;
+  return Buffer.from(v, 'base64');
+}
+
+/** Checks that tie the attestation challenge and any embedded content to the signed hashes. */
+function bindingChecks(b: EvidenceBundle): Check[] {
+  const c = new CheckList();
+  const n = b.nonce;
+  let derived = '';
+  try {
+    derived = deriveNonce(n.salt, n.request_sha256);
+  } catch {
+    derived = '';
+  }
+  c.expect(
+    /^[0-9a-f]{64}$/.test(n.salt ?? '') && /^[0-9a-f]{64}$/.test(n.request_sha256 ?? '') && derived === n.value,
+    'nonce_derivation',
+    'Challenge was derived from this request',
+    `nonce = SHA-256(domain ‖ salt ‖ request hash) recomputes to ${n.value.slice(0, 16)}…`,
+    'The attestation nonce does not recompute from the recorded salt and request hash.',
+  );
+  if (b.completion) {
+    c.expect(
+      b.completion.request_sha256 === n.request_sha256,
+      'request_bound',
+      'Signed request is the challenged request',
+      'The request hash covered by the signature is the one the attestation challenge was derived from.',
+      'The signed request hash differs from the request the attestation challenge was derived from.',
+    );
+    for (const [field, hash, label] of [
+      ['request_b64', b.completion.request_sha256, 'request'],
+      ['response_b64', b.completion.response_sha256, 'response'],
+    ] as const) {
+      const raw = b.completion[field];
+      if (raw === undefined) continue;
+      const bytes = b64Bytes(raw);
+      c.expect(
+        bytes !== null && sha256Hex(bytes) === hash,
+        `${label}_bytes`,
+        `Included ${label} bytes match the signed hash`,
+        `SHA-256 of the included ${label} bytes equals the signed ${label} hash.`,
+        `The included ${label} bytes do not hash to the signed ${label} hash (content was altered).`,
+      );
+    }
+  }
+  return c.checks;
+}
+
+export interface EvaluateOptions {
+  policy?: ReportPolicy;
+}
+
+export function evaluateBundle(
+  b: EvidenceBundle,
+  opts: EvaluateOptions = {},
+): { receipt: Receipt; preflight: PreflightResult; signature: SignatureCheckResult | null } {
+  const pre = evaluatePreflight(b, opts.policy ?? DEFAULT_POLICY);
   const properties: Property[] = [];
 
   // Gateway TEE
@@ -272,11 +342,11 @@ export function evaluateBundle(b: EvidenceBundle): { receipt: Receipt; preflight
   properties.push(prop('gpu_tee', 'Model GPUs are in confidential-computing mode',
     'NVIDIA attested — and signed a verdict bound to our nonce — that the GPUs serving the model are genuine and running in confidential-computing mode with expected firmware.', gpuChecks));
 
-  const sigChecks: Check[] = sig ? sig.checks.checks : [
+  const sigChecks: Check[] = sig ? [...bindingChecks(b), ...sig.checks.checks] : [
     { id: 'signature_present', label: 'Response signature available', status: 'unavailable', detail: b.blocked_reason ? `Not requested: ${b.blocked_reason}` : `Completion unavailable (HTTP ${b.completion?.status ?? 'n/a'}).` },
   ];
   properties.push(prop('response_signature', 'Analysis was signed inside the model enclave',
-    'The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for.', sigChecks));
+    'The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.', sigChecks));
 
   const verdict = combineVerdicts(properties.map((p) => p.verdict));
   const failed = properties.filter((p) => p.verdict === 'FAILED').map((p) => p.title);
@@ -294,6 +364,7 @@ export function evaluateBundle(b: EvidenceBundle): { receipt: Receipt; preflight
     signature: sig,
     receipt: {
       schema: 'privatetriage.receipt/v1',
+      verifier: VERIFIER_ID,
       verdict,
       headline,
       captured_at: b.captured_at,

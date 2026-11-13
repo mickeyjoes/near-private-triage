@@ -44,6 +44,8 @@ export interface RunOptions {
   policy?: ReportPolicy;
   onStage?: (stage: Stage, detail: string) => void;
   signatureRetries?: number;
+  /** Attest and appraise only; never send the request (no API key needed). */
+  preflightOnly?: boolean;
 }
 
 export interface RunResult {
@@ -135,31 +137,54 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
           bundle.collateral[quoteKey(qh)] = (cols[i] as Collateral | null) ?? null;
         });
         const models = Array.isArray(att.model_attestations) ? att.model_attestations : [];
+        const errors: Record<string, string> = {};
         const nras = await Promise.all(
-          models.map(async (m): Promise<NrasEvidence | null> => {
+          models.map(async (m, i): Promise<NrasEvidence | null> => {
             if (!isRecord(m)) return null;
+            let p;
             try {
-              const p = parseGpuPayload(m.nvidia_payload);
-              // Only submit evidence that answers OUR challenge.
-              if (p.nonce.toLowerCase() !== nonce) return null;
-              return await fetchNrasEvidence(p.text);
-            } catch {
+              p = parseGpuPayload(m.nvidia_payload);
+            } catch (e) {
+              errors[String(i)] = (e as Error).message;
               return null;
             }
+            // Only submit evidence that answers OUR challenge.
+            if (p.nonce.toLowerCase() !== nonce) {
+              errors[String(i)] = 'GPU evidence does not answer our nonce; not submitted';
+              return null;
+            }
+            // NRAS is an external service: bounded retry on transient failure.
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                return await fetchNrasEvidence(p.text);
+              } catch (e) {
+                errors[String(i)] = (e as Error).message;
+                await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+              }
+            }
+            return null;
           }),
         );
         nras.forEach((n, i) => {
           bundle.nras[String(i)] = n;
+          if (n) delete errors[String(i)];
         });
+        if (Object.keys(errors).length) bundle.nras_errors = errors;
       }
     }
 
-    const pre = evaluatePreflight(bundle);
+    const pre = evaluatePreflight(bundle, bundle.policy);
     stage('appraisal', pre.ok ? `Gateway + ${pre.verifiedModelSigners.length} model TEE verified` : pre.reason);
     if (!pre.ok) {
       bundle.blocked_reason = bundle.blocked_reason ?? pre.reason;
       stage('blocked', 'Report NOT sent: attestation did not verify');
-      const { receipt } = evaluateBundle(bundle);
+      const { receipt } = evaluateBundle(bundle, { policy: bundle.policy });
+      return { bundle, receipt, requestBytes, responseBytes: null };
+    }
+    if (opts.preflightOnly) {
+      bundle.blocked_reason = 'Preflight only: attestation verified, no report was sent.';
+      stage('verdict', 'Preflight passed; nothing sent');
+      const { receipt } = evaluateBundle(bundle, { policy: bundle.policy });
       return { bundle, receipt, requestBytes, responseBytes: null };
     }
 
@@ -221,7 +246,7 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
       }
     }
 
-    const { receipt } = evaluateBundle(bundle);
+    const { receipt } = evaluateBundle(bundle, { policy: bundle.policy });
     stage('verdict', receipt.verdict);
     return { bundle, receipt, requestBytes, responseBytes };
   } finally {

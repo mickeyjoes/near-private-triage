@@ -115,6 +115,7 @@ export function checkGpuEvidence(
   nonceHex: string,
   nras: NrasEvidence | null,
   nowSecs: number,
+  nrasError?: string,
 ): GpuCheckResult {
   const c = new CheckList();
   const out: GpuCheckResult = { checks: c, gpuCount: 0, arch: null, claims: null };
@@ -139,7 +140,7 @@ export function checkGpuEvidence(
   );
   if (!nonceOk) return out;
   if (!nras) {
-    c.unavailable('nras_verdict', 'NVIDIA NRAS verdict', 'NRAS was not reachable; GPU evidence not appraised.');
+    c.unavailable('nras_verdict', 'NVIDIA NRAS verdict', `NRAS was not reachable${nrasError ? ` (${nrasError.slice(0, 120)})` : ''}; GPU evidence not appraised.`);
     return out;
   }
   let body: unknown;

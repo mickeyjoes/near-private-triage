@@ -1,0 +1,28 @@
+{
+ "schema": "privatetriage.evidence/v1",
+ "captured_at": "2026-11-13T16:27:55.586Z",
+ "captured_at_secs": 1794587275,
+ "endpoint": "https://cloud-api.near.ai",
+ "model": "openai/gpt-5.4",
+ "nonce": {
+  "salt": "83e4d2002c2d08d2470f9cf49f3697ef6afcb9c6b4795fbcd7e0afac86b856a8",
+  "request_sha256": "7adcbccc490e3906c3915c5499cb82a285aea927b780180ce612a91ab519c91c",
+  "value": "72840ae7d0779111892b13228f56d49298ae668cfb28fca28be49d053c9c3554"
+ },
+ "attestation": {
+  "status": 503,
+  "body": "{\"error\":{\"message\":\"Provider error: No provider found that supports attestation reports for model: openai/gpt-5.4\",\"type\":\"provider_error\",\"param\":null,\"code\":null}}",
+  "socket_id": 5,
+  "peer_spki_sha256": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad"
+ },
+ "collateral": {},
+ "nras": {},
+ "completion": null,
+ "signature": null,
+ "policy": {
+  "acceptedTcbStatuses": [
+   "UpToDate"
+  ]
+ },
+ "blocked_reason": "Attestation report unavailable (HTTP 503): “Provider error: No provider found that supports attestation reports for model: openai/gpt-5.4”."
+}

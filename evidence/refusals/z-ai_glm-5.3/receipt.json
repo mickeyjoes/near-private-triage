@@ -1,0 +1,118 @@
+{
+  "schema": "privatetriage.receipt/v1",
+  "verifier": "privatetriage-verifier/1 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS)",
+  "verdict": "UNVERIFIED",
+  "headline": "Not verified: Gateway runs in a genuine Intel TDX enclave; Your report was encrypted to the attested gateway; Model runs in a genuine Intel TDX enclave; Model GPUs are in confidential-computing mode; Analysis was signed inside the model enclave.",
+  "captured_at": "2026-11-13T16:27:55.250Z",
+  "endpoint": "https://cloud-api.near.ai",
+  "model": "z-ai/glm-5.3",
+  "nonce": {
+    "salt": "ccdc7f81413e001c161c3a450382721a18b178e9e8ed36f43bbc740fe95d4ab6",
+    "request_sha256": "cf20a3db93cd5abd489c040560708d556518a842aa7a8124d692331e2cdd1b9b",
+    "value": "ccd6d53b2995e66aa809bbc77d70c2638b8b665c327d14dc74bc7bbe84fef4a5",
+    "derivation": "SHA-256(\"privatetriage/attestation-nonce/v1\" ‖ salt ‖ request_sha256)"
+  },
+  "request_sha256": "cf20a3db93cd5abd489c040560708d556518a842aa7a8124d692331e2cdd1b9b",
+  "response_sha256": null,
+  "chat_id": null,
+  "disclosed": false,
+  "signer": null,
+  "properties": [
+    {
+      "id": "gateway_tee",
+      "title": "Gateway runs in a genuine Intel TDX enclave",
+      "statement": "The NEAR AI Cloud gateway that received the request runs measured software inside an Intel TDX confidential VM, and produced this evidence after our challenge.",
+      "checks": [
+        {
+          "id": "report_present",
+          "label": "Attestation report present",
+          "status": "unavailable",
+          "detail": "Attestation report unavailable (HTTP 503): “Provider error: No provider found that supports attestation reports for model: z-ai/glm-5.3”."
+        }
+      ],
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "id": "tls_binding",
+      "title": "Your report was encrypted to the attested gateway",
+      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary.",
+      "checks": [
+        {
+          "id": "tls_spki",
+          "label": "TLS key is inside the attested TEE",
+          "status": "unavailable",
+          "detail": "Gateway TLS fingerprint evidence unavailable."
+        },
+        {
+          "id": "same_connection",
+          "label": "Report sent over the attested connection",
+          "status": "unavailable",
+          "detail": "No inference request was sent."
+        }
+      ],
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "id": "model_tee",
+      "title": "Model runs in a genuine Intel TDX enclave",
+      "statement": "The model-serving environment runs measured software in an Intel TDX confidential VM, bound to the signing key, and answered our fresh challenge.",
+      "checks": [
+        {
+          "id": "model_report",
+          "label": "Model attestation present",
+          "status": "unavailable",
+          "detail": "No model-TEE attestation candidates were returned."
+        }
+      ],
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "id": "gpu_tee",
+      "title": "Model GPUs are in confidential-computing mode",
+      "statement": "NVIDIA attested — and signed a verdict bound to our nonce — that the GPUs serving the model are genuine and running in confidential-computing mode with expected firmware.",
+      "checks": [
+        {
+          "id": "gpu_evidence",
+          "label": "GPU evidence present",
+          "status": "unavailable",
+          "detail": "No model-TEE attestation candidates were returned."
+        }
+      ],
+      "verdict": "UNVERIFIED"
+    },
+    {
+      "id": "response_signature",
+      "title": "Analysis was signed inside the model enclave",
+      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.",
+      "checks": [
+        {
+          "id": "signature_present",
+          "label": "Response signature available",
+          "status": "unavailable",
+          "detail": "Not requested: Attestation report unavailable (HTTP 503): “Provider error: No provider found that supports attestation reports for model: z-ai/glm-5.3”."
+        }
+      ],
+      "verdict": "UNVERIFIED"
+    }
+  ],
+  "gateway": null,
+  "model_tee": {
+    "candidates_returned": 0,
+    "candidates_verified": 0
+  },
+  "not_proven": [
+    "That the model’s security analysis is correct. AI triage is a recommendation; attestation proves how it ran, not what it concluded.",
+    "That NEAR AI Cloud does not retain prompts. Attestation identifies measured software; it does not audit retention behaviour of that software.",
+    "End-to-end encryption to the model. TLS terminates in the attested gateway TEE; the gateway then forwards to the model TEE over a channel this receipt does not verify.",
+    "Image provenance. Container digests are measured and displayed, but not checked against a source-build allowlist.",
+    "That the verified model report and the completion came from the same serving instance (instances of one model share a signing key).",
+    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost."
+  ],
+  "trust_assumptions": [
+    "Intel TDX hardware and Intel’s attestation signing root (DCAP / PCS).",
+    "NVIDIA H100/H200 confidential-computing hardware and NVIDIA NRAS signing keys (JWKS fetched over WebPKI TLS).",
+    "The measured NEAR AI Cloud software stack (dstack, gateway, model server) behaves as its published source describes.",
+    "The PrivateTriage backend you run: it holds the API key, sees your report in plaintext, and performs these checks.",
+    "WebPKI for the TLS connections to Intel PCS, NVIDIA NRAS and NEAR AI Cloud."
+  ]
+}

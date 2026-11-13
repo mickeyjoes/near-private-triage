@@ -1,0 +1,28 @@
+{
+ "schema": "privatetriage.evidence/v1",
+ "captured_at": "2026-11-13T16:27:55.250Z",
+ "captured_at_secs": 1794587275,
+ "endpoint": "https://cloud-api.near.ai",
+ "model": "z-ai/glm-5.3",
+ "nonce": {
+  "salt": "ccdc7f81413e001c161c3a450382721a18b178e9e8ed36f43bbc740fe95d4ab6",
+  "request_sha256": "cf20a3db93cd5abd489c040560708d556518a842aa7a8124d692331e2cdd1b9b",
+  "value": "ccd6d53b2995e66aa809bbc77d70c2638b8b665c327d14dc74bc7bbe84fef4a5"
+ },
+ "attestation": {
+  "status": 503,
+  "body": "{\"error\":{\"message\":\"Provider error: No provider found that supports attestation reports for model: z-ai/glm-5.3\",\"type\":\"provider_error\",\"param\":null,\"code\":null}}",
+  "socket_id": 4,
+  "peer_spki_sha256": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad"
+ },
+ "collateral": {},
+ "nras": {},
+ "completion": null,
+ "signature": null,
+ "policy": {
+  "acceptedTcbStatuses": [
+   "UpToDate"
+  ]
+ },
+ "blocked_reason": "Attestation report unavailable (HTTP 503): “Provider error: No provider found that supports attestation reports for model: z-ai/glm-5.3”."
+}
