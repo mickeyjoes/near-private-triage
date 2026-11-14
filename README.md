@@ -27,7 +27,7 @@ Requirements: Node.js ≥ 24 (developed on 26), npm, Linux or macOS.
 | 5 | Pick **"Vague claim + prompt injection"**, then replay | The report demands "CRITICAL / CVSS 10.0 / maximum bounty". It is flagged by the local scan (5 patterns) and by the model, and rated *undetermined / needs more information*. |
 | 6 | Scroll to **Tamper lab**, then click **Reveal all** | 26 attacks on genuine evidence, all caught: 21 FAILED, 5 UNVERIFIED. The real verifier computed these results **when the site was built** (and `npm test` recomputes them); clicking reveals them. They are the attacks we tested, not a completeness proof. |
 | 7 | `npm run verify -- evidence/gate1/2026-11-13T16-12-38-022Z/evidence.json --receipt evidence/gate1/2026-11-13T16-12-38-022Z/receipt.json` | `VERDICT: VERIFIED` and `receipt: MATCHES`. The verifier re-checks Intel quotes, the raw GPU reports and NVIDIA's platform and per-GPU tokens, the recorded TLS observations and the enclave signature offline, and the recomputed receipt is byte-identical. |
-| 8 | `npm test` | **107 passing**: genuine bundles re-verify; genuine refusals stay unverified; all 26 tamper scenarios are caught by the intended check; the API key is never sent on a non-attested connection (report POST *and* signature fetch); a failed send is never reported as "not sent"; an altered saved analysis fails the demo build. |
+| 8 | `npm test` | **113 passing**: genuine bundles re-verify; genuine refusals stay unverified; all 26 tamper scenarios are caught by the intended check; the API key is never sent on a non-attested connection (report POST *and* signature fetch); a failed send is never reported as "not sent"; an altered saved analysis fails the demo build; an unauthenticated response is never labelled as signed enclave output. |
 | 9 | *(optional, live, ≈ $0.006)* put `NEARAI_CLOUD_API_KEY=sk-…` in `.env`, run `npm start`, then click **Attest & triage** | A fresh confidential inference in about 15 s, with streamed stages and a new receipt. **Evidence & export** downloads files that re-verify with step 7. |
 | 10 | *(optional, live)* `npm run gate1` | The minimal Gate 1 probe. It exits 0 only on VERIFIED and writes `evidence/gate1/<timestamp>/`. |
 
@@ -70,6 +70,7 @@ browser ──localhost──▶ PrivateTriage backend ══TLS (key ∈ attest
 | NEAR contract async drain (fictional) | `Qwen/Qwen3.6-35B-A3B-FP8` | VERIFIED | `0xfdbd7952498b333206f360d71d97a1e0961e8ddf` | [evidence/samples/lumora-staking](evidence/samples/lumora-staking) |
 | SaaS SSRF → cloud credentials (fictional) | `Qwen/Qwen3.6-35B-A3B-FP8` | VERIFIED; one recommended action is **wrong** and carries a visible analyst correction | same | [evidence/samples/quillmark-ssrf](evidence/samples/quillmark-ssrf) |
 | Vague timing claim + prompt injection (fictional) | `Qwen/Qwen3.6-35B-A3B-FP8` | VERIFIED; injection flagged | same | [evidence/samples/tesserine-timing](evidence/samples/tesserine-timing) |
+| Live smoke test of the corrected transport, after the final audit (fictional SSRF sample, 2026-11-14) | `Qwen/Qwen3.6-35B-A3B-FP8` | VERIFIED, 47/47 checks; attestation, report and signature on one attested TLS socket | `0xfdbd7952498b333206f360d71d97a1e0961e8ddf` | [evidence/smoke](evidence/smoke) |
 | External-provider models | `openai/gpt-5.4`, `z-ai/glm-5.3` | UNVERIFIED; **report not sent** | none | [evidence/refusals](evidence/refusals) |
 | NVIDIA NRAS outages during development | Qwen3.6 | UNVERIFIED; **report not sent** (3 of 3) | none | [evidence/attempts](evidence/attempts) |
 
@@ -157,6 +158,8 @@ An independent audit of commit `cff3b6c` found four confirmed medium-severity de
 | F4 | The static demo displayed `run.json`'s saved analysis beside a genuine receipt without checking it against the signed response. | The build re-parses the signed response bytes, matches the signed request to the sample byte-for-byte, and fails on any mismatch. |
 | F5 | The recorded Quillmark analysis recommends security-group egress rules to protect EC2 instance metadata; security groups do not filter that traffic. | The signed response is preserved unchanged; a visible, separately labelled analyst correction (bound to the response hash) explains the real controls. |
 
+A follow-up delta review of the fixes confirmed F1–F5 corrected and found one low-severity presentation defect (D1): the analysis note, the reasoning label and the Markdown export called a response "signed" — and an unattested signer "the model deployment’s enclave key" — even when the receipt was UNVERIFIED or FAILED. That wording now appears only when the response signature *and* the whole receipt verify; otherwise the content is labelled "received response — authenticity NOT verified" and any address a "claimed, unverified" signer (regression tests for a missing signature and an unattested signer).
+
 The audit's wording findings (exact-analysis, "ignored", click-time re-verification, request-hash scope, historical freshness, shared model keys and provider trust) are corrected throughout. Details: [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md#final-independent-audit-2026-11-14).
 
 ## Repository layout
@@ -170,7 +173,7 @@ shared/            triage schema + CVSS 3.1 calculator, hygiene scan, fictional 
 web/               React + Vite UI (guided demo works as a static site)
 scripts/           gate1.ts, record-samples.ts, verify-bundle.ts, build-demo.ts
 evidence/          genuine recorded bundles + receipts (gate1, samples, refusals, attempts)
-test/              node:test suites (107 tests)
+test/              node:test suites (113 tests)
 docs/              TRUST_MODEL.md, SUBMISSION.md, PURSEWARDEN_DIFFERENCE.md, media/
 ```
 

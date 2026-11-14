@@ -18,6 +18,6 @@ jobs:
       - run: npm run build
       - name: Re-verify recorded evidence offline
         run: |
-          for d in evidence/gate1/*/ evidence/samples/*/; do
+          for d in evidence/gate1/*/ evidence/samples/*/ evidence/smoke/*/; do
             node scripts/verify-bundle.ts "$d/evidence.json" --receipt "$d/receipt.json" --quiet
           done

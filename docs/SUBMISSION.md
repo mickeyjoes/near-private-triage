@@ -18,7 +18,7 @@ Problem: an unpublished vulnerability report is the most sensitive document a se
 
 Product (research prototype): PrivateTriage sends a report to an AI model on NEAR AI Cloud only after the gateway and model enclaves' evidence verifies. Per report it derives a fresh nonce from the request hash, fetches attestation over a pinned TLS connection, and verifies the gateway's Intel TDX quote (DCAP, TCB, NEAR's pinned OS image and app, RTMR3), that the TLS key lives inside that enclave, every model enclave's TDX quote, and the GPUs: device-signed reports plus NVIDIA's signed platform and per-GPU appraisals, all bound to the nonce. Only then is the report sent, on the same attested connection; the API key never travels on any other. The model enclave's provider_tee signature over SHA-256 of the exact request and response must come from a verified key, and the analysis shown is parsed from those signed bytes. The UI shows a structured triage (CVSS recomputed from the vector, injection attempts flagged) beside a fail-closed receipt that separates what is proven from what is not (AI correctness, retention, end-to-end encryption, serving instance).
 
-Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify offline byte-for-byte with no API key. 26 tested attacks on genuine evidence (edited verdict, replayed attestation, forged signer, TLS interception, forged NVIDIA tokens, invented GPUs...) are all caught. External-provider models are refused before disclosure. 107 tests. Findings from an independent audit were fixed before release.
+Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify offline byte-for-byte with no API key. 26 tested attacks on genuine evidence (edited verdict, replayed attestation, forged signer, TLS interception, forged NVIDIA tokens, invented GPUs...) are all caught. External-provider models are refused before disclosure. 113 tests. Findings from an independent audit were fixed before release.
 
 NEAR: NEAR AI Cloud private inference, TEE attestation and response-signature APIs (Privacy & Private AI track). Independent second project by the author of Pursewarden.
 ```
@@ -70,8 +70,8 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 |---|---|
 | Gate 1: real inference, fresh nonce, attestation, signature bound to the request, response and model; machine-readable VERIFIED | ✅ `evidence/gate1/2026-11-13T16-12-38-022Z` |
 | Product: 3 fictional samples (one uncertain plus injection), structured triage, exports | ✅ |
-| Negative tests: tampering, signer mismatch, invalid quote, stale challenge, unavailable evidence, corrupted response, non-TEE model, malformed output, prompt injection, forged/invented GPU evidence, credential on a replacement connection, failed-send state, altered demo analysis | ✅ 107/107 |
-| Final independent audit (2026-11-14): F1–F4 fixed with regression tests, F5 annotated, wording corrected | ✅ branch `fix/final-audit` (CI green); ⏳ owner merges into `main` |
+| Negative tests: tampering, signer mismatch, invalid quote, stale challenge, unavailable evidence, corrupted response, non-TEE model, malformed output, prompt injection, forged/invented GPU evidence, credential on a replacement connection, failed-send state, altered demo analysis, unauthenticated response labelled as signed | ✅ 113/113 |
+| Final independent audit (2026-11-14): F1–F4 fixed with regression tests, F5 annotated, wording corrected; delta review D1 (signed-output wording) fixed; corrected transport smoke-tested live (VERIFIED) | ✅ branch `fix/final-audit` (CI green); ⏳ owner merges into `main` |
 | Offline receipt reproduction (byte-identical) | ✅ `npm run verify` |
 | UI checked at desktop (1440) and mobile (390); no horizontal overflow; no console errors | ✅ |
 | Clean-checkout build (`git clone` → `npm ci` → typecheck → test → build) | ✅ (see PROJECT_HANDOFF) |

@@ -15,6 +15,7 @@ const dirs = (root: string) => readdirSync(root, { withFileTypes: true }).filter
 
 const SAMPLE_DIRS = dirs('evidence/samples');
 const GATE1_DIRS = dirs('evidence/gate1');
+const SMOKE_DIRS = dirs('evidence/smoke');
 const base = load(join('evidence/samples/lumora-staking/evidence.json'));
 const other = load(join('evidence/samples/quillmark-ssrf/evidence.json'));
 
@@ -25,7 +26,7 @@ function check(receipt: ReturnType<typeof evaluateBundle>['receipt'], property: 
 }
 
 describe('genuine evidence', () => {
-  for (const d of [...GATE1_DIRS, ...SAMPLE_DIRS]) {
+  for (const d of [...GATE1_DIRS, ...SAMPLE_DIRS, ...SMOKE_DIRS]) {
     it(`${d} re-verifies offline and reproduces its receipt byte-for-byte`, () => {
       const { receipt } = evaluateBundle(load(join(d, 'evidence.json')));
       assert.equal(receipt.verdict, 'VERIFIED', receipt.headline);
@@ -34,6 +35,21 @@ describe('genuine evidence', () => {
       for (const p of receipt.properties) for (const c of p.checks) assert.equal(c.status, 'pass', `${p.id}/${c.id}: ${c.detail}`);
     });
   }
+
+  it('post-audit live smoke run: attestation, report POST and signature GET all used the one attested TLS socket', () => {
+    assert.ok(SMOKE_DIRS.length >= 1);
+    for (const d of SMOKE_DIRS) {
+      const b = load(join(d, 'evidence.json'));
+      const { receipt } = evaluateBundle(b);
+      assert.equal(receipt.transmission, 'sent');
+      assert.equal(b.signature_error ?? null, null);
+      const a = b.attestation!;
+      for (const x of [b.completion!, b.signature!] as { socket_id?: number; peer_spki_sha256?: string }[]) {
+        assert.equal(x.socket_id, a.socket_id);
+        assert.equal(x.peer_spki_sha256, a.peer_spki_sha256);
+      }
+    }
+  });
 
   it('the signer is the attested model enclave, not the gateway', () => {
     const { receipt } = evaluateBundle(base);

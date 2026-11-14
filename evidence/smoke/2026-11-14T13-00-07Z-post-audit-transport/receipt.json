@@ -1,0 +1,435 @@
+{
+  "schema": "privatetriage.receipt/v1",
+  "verifier": "privatetriage-verifier/2 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS + per-GPU claims + device reports)",
+  "verdict": "VERIFIED",
+  "headline": "Confidential execution verified: attested gateway and GPU-backed model TEE; response signed by the model deployment’s enclave key.",
+  "captured_at": "2026-11-14T13:00:07.735Z",
+  "endpoint": "https://cloud-api.near.ai",
+  "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "nonce": {
+    "salt": "8581b9f36dab48da7ec56a004e7f826490ca5d290a8b8ca1e6f3d114180402da",
+    "request_sha256": "281d71854082b1aacdd7cc1adbaecf474ba4525f9c93f6654ecfa8793ec7aca5",
+    "value": "36255008b5fbd5a8181eb18998a67d2a8cb4d56b0928c2ca6d9943fd7f628360",
+    "derivation": "SHA-256(\"privatetriage/attestation-nonce/v1\" ‖ salt ‖ request_sha256)"
+  },
+  "request_sha256": "281d71854082b1aacdd7cc1adbaecf474ba4525f9c93f6654ecfa8793ec7aca5",
+  "response_sha256": "8365d823c4135e721fef3a3c3f7a7f56c54a55395657863f09fd31e7f1143bd6",
+  "chat_id": "34af3bf6d7c64201bba3b66e3fe6917a",
+  "transmission": "sent",
+  "transmission_detail": "Report delivered to the attested gateway; HTTP 200 response received.",
+  "disclosed": true,
+  "signer": {
+    "kind": "provider_tee",
+    "algo": "ecdsa",
+    "address": "0xfdbd7952498b333206f360d71d97a1e0961e8ddf"
+  },
+  "properties": [
+    {
+      "id": "gateway_tee",
+      "title": "Gateway runs in a genuine Intel TDX enclave",
+      "statement": "The NEAR AI Cloud gateway that received the request runs measured software inside an Intel TDX confidential VM, and produced this evidence after our challenge.",
+      "checks": [
+        {
+          "id": "quote_verified",
+          "label": "Intel TDX quote verifies",
+          "status": "pass",
+          "detail": "DCAP signature chain to Intel root verified (td10)."
+        },
+        {
+          "id": "tcb_status",
+          "label": "Platform TCB status accepted by policy",
+          "status": "pass",
+          "detail": "TCB status UpToDate; no advisories."
+        },
+        {
+          "id": "not_debug",
+          "label": "TD is not in debug mode",
+          "status": "pass",
+          "detail": "TD_ATTRIBUTES debug bit is 0."
+        },
+        {
+          "id": "signer_bound",
+          "label": "Quote binds the signing key",
+          "status": "pass",
+          "detail": "report_data[0:32] = SHA-256(signer ‖ TLS SPKI fingerprint) for 0xb98a789cdc4817275f5155593ba73ef2a957e779."
+        },
+        {
+          "id": "nonce_bound",
+          "label": "Quote embeds our fresh nonce",
+          "status": "pass",
+          "detail": "report_data[32:64] equals the client-generated nonce: the quote was produced after our challenge."
+        },
+        {
+          "id": "nonce_echo",
+          "label": "Echoed request_nonce matches",
+          "status": "pass",
+          "detail": "HTTP request_nonce equals our nonce."
+        },
+        {
+          "id": "report_data_echo",
+          "label": "Echoed report_data matches quote",
+          "status": "pass",
+          "detail": "HTTP report_data equals the quote report_data."
+        },
+        {
+          "id": "mrconfig",
+          "label": "Measured config matches app_compose",
+          "status": "pass",
+          "detail": "MRCONFIGID = 01 ‖ SHA-256(app_compose) = 2643bc7ae47ecf4c…"
+        },
+        {
+          "id": "rtmr3",
+          "label": "Event log replays to RTMR3",
+          "status": "pass",
+          "detail": "Replaying the IMR-3 event log reproduces the quote’s RTMR3, so the logged app events are the measured ones."
+        },
+        {
+          "id": "compose_event",
+          "label": "Measured compose-hash event matches app_compose",
+          "status": "pass",
+          "detail": "RTMR3 compose-hash event = SHA-256(app_compose) = MRCONFIGID payload."
+        },
+        {
+          "id": "os_image",
+          "label": "Pinned NEAR dstack OS image",
+          "status": "pass",
+          "detail": "NEAR AI Cloud gateway · dstack OS (observed 2026-11-13): MRTD, RTMR1, RTMR2 and os-image-hash match."
+        },
+        {
+          "id": "app_identity",
+          "label": "Pinned NEAR app identity",
+          "status": "pass",
+          "detail": "NEAR AI Cloud gateway: app-id f550fdfb4eb8…, KMS and key provider match."
+        }
+      ],
+      "verdict": "VERIFIED"
+    },
+    {
+      "id": "tls_binding",
+      "title": "Your report was encrypted to the attested gateway",
+      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence (a recorder assertion); offline re-verification checks them against the quote but cannot re-observe the connection.",
+      "checks": [
+        {
+          "id": "tls_spki",
+          "label": "TLS key is inside the attested TEE",
+          "status": "pass",
+          "detail": "SPKI of the certificate on this very connection equals the quote-bound fingerprint."
+        },
+        {
+          "id": "endpoint",
+          "label": "Recorded endpoint is NEAR AI Cloud",
+          "status": "pass",
+          "detail": "Endpoint https://cloud-api.near.ai (recorded by the backend)."
+        },
+        {
+          "id": "same_connection",
+          "label": "Report sent over the attested connection",
+          "status": "pass",
+          "detail": "The inference request used the same TLS connection (same socket, same peer certificate key) that was matched to the gateway quote."
+        }
+      ],
+      "verdict": "VERIFIED"
+    },
+    {
+      "id": "model_tee",
+      "title": "Model runs in a genuine Intel TDX enclave",
+      "statement": "Every model-serving environment NEAR returned for this model runs pinned, measured software in an Intel TDX confidential VM, is bound to its signing key, and answered our fresh challenge.",
+      "checks": [
+        {
+          "id": "quote_verified",
+          "label": "Intel TDX quote verifies",
+          "status": "pass",
+          "detail": "DCAP signature chain to Intel root verified (td10)."
+        },
+        {
+          "id": "tcb_status",
+          "label": "Platform TCB status accepted by policy",
+          "status": "pass",
+          "detail": "TCB status UpToDate; no advisories."
+        },
+        {
+          "id": "not_debug",
+          "label": "TD is not in debug mode",
+          "status": "pass",
+          "detail": "TD_ATTRIBUTES debug bit is 0."
+        },
+        {
+          "id": "signer_bound",
+          "label": "Quote binds the signing key",
+          "status": "pass",
+          "detail": "report_data[0:32] = SHA-256(signer ‖ TLS SPKI fingerprint) for 0xfdbd7952498b333206f360d71d97a1e0961e8ddf."
+        },
+        {
+          "id": "nonce_bound",
+          "label": "Quote embeds our fresh nonce",
+          "status": "pass",
+          "detail": "report_data[32:64] equals the client-generated nonce: the quote was produced after our challenge."
+        },
+        {
+          "id": "nonce_echo",
+          "label": "Echoed request_nonce matches",
+          "status": "pass",
+          "detail": "HTTP request_nonce equals our nonce."
+        },
+        {
+          "id": "mrconfig",
+          "label": "Measured config matches app_compose",
+          "status": "pass",
+          "detail": "MRCONFIGID = 01 ‖ SHA-256(app_compose) = e8416a02d6f7ce47…"
+        },
+        {
+          "id": "rtmr3",
+          "label": "Event log replays to RTMR3",
+          "status": "pass",
+          "detail": "Replaying the IMR-3 event log reproduces the quote’s RTMR3, so the logged app events are the measured ones."
+        },
+        {
+          "id": "compose_event",
+          "label": "Measured compose-hash event matches app_compose",
+          "status": "pass",
+          "detail": "RTMR3 compose-hash event = SHA-256(app_compose) = MRCONFIGID payload."
+        },
+        {
+          "id": "os_image",
+          "label": "Pinned NEAR dstack OS image",
+          "status": "pass",
+          "detail": "NEAR AI Cloud GPU model node · dstack OS (observed 2026-11-13): MRTD, RTMR1, RTMR2 and os-image-hash match."
+        },
+        {
+          "id": "app_identity",
+          "label": "Pinned NEAR app identity",
+          "status": "pass",
+          "detail": "NEAR AI Cloud model serving: app-id 2c0a0c96cb6d…, KMS and key provider match."
+        },
+        {
+          "id": "model_name",
+          "label": "Report is for the requested model",
+          "status": "pass",
+          "detail": "Report is for Qwen/Qwen3.6-35B-A3B-FP8."
+        }
+      ],
+      "verdict": "VERIFIED"
+    },
+    {
+      "id": "gpu_tee",
+      "title": "Model GPUs are in confidential-computing mode",
+      "statement": "Each GPU report reported by the model enclave is signed by a genuine NVIDIA GPU and answers our nonce; NVIDIA’s signed appraisal of exactly those GPUs (per-GPU claims bound into the platform token) reports confidential-computing measurements that match, secure boot and no debug.",
+      "checks": [
+        {
+          "id": "gpu_evidence",
+          "label": "GPU evidence present",
+          "status": "pass",
+          "detail": "8 raw GPU attestation reports, as returned by NEAR (authenticated below)."
+        },
+        {
+          "id": "gpu_nonce",
+          "label": "GPU evidence answers our nonce",
+          "status": "pass",
+          "detail": "nvidia_payload and every GPU entry name our client nonce."
+        },
+        {
+          "id": "gpu_device_reports",
+          "label": "Raw GPU reports signed by genuine NVIDIA GPUs",
+          "status": "pass",
+          "detail": "All 8 reports: device certificate chains to the pinned NVIDIA Device Identity CA, the SPDM measurement report is signed by the device key, and the signed request carries our nonce."
+        },
+        {
+          "id": "nras_signature",
+          "label": "NRAS verdict signed by NVIDIA",
+          "status": "pass",
+          "detail": "ES384 token verifies with a key certified by a pinned NVIDIA attestation CA; issuer nras.attestation.nvidia.com."
+        },
+        {
+          "id": "time_anchor",
+          "label": "Capture time matches NVIDIA-signed time",
+          "status": "pass",
+          "detail": "Evidence evaluated at 2026-11-14T13:00:07.000Z, within 10 min of the NVIDIA-signed iat."
+        },
+        {
+          "id": "nras_nonce",
+          "label": "NRAS verdict bound to our nonce",
+          "status": "pass",
+          "detail": "Signed eat_nonce equals our client nonce."
+        },
+        {
+          "id": "nras_verdict",
+          "label": "NVIDIA NRAS verdict",
+          "status": "pass",
+          "detail": "x-nvidia-overall-att-result = true (NVIDIA-signed overall platform appraisal)."
+        },
+        {
+          "id": "gpu_claims",
+          "label": "Per-GPU NVIDIA claims authenticated",
+          "status": "pass",
+          "detail": "8 per-GPU tokens match the digests signed in the platform token, verify under the pinned NVIDIA key policy and answer our nonce; each reports firmware/driver measurements match NVIDIA reference values, secure boot enabled, debug disabled, architecture check passed, report signature verified by NRAS, device certificate chain validated by NRAS, report nonce matched."
+        },
+        {
+          "id": "gpu_inventory",
+          "label": "Appraised GPUs are the reported GPUs",
+          "status": "pass",
+          "detail": "The 8 NVIDIA-signed device ids equal the serial numbers of the 8 reported GPU device certificates, one to one."
+        }
+      ],
+      "verdict": "VERIFIED"
+    },
+    {
+      "id": "response_signature",
+      "title": "Response signed by the model deployment’s enclave key",
+      "statement": "A key that the attested model enclave vouches for signed SHA-256 hashes of the exact serialized API request (system prompt, report, model and parameters) and the exact response bytes; the attestation challenge was derived from that same request. Checked after the response, so it cannot gate disclosure.",
+      "checks": [
+        {
+          "id": "capture_time",
+          "label": "Displayed capture time is the evaluated time",
+          "status": "pass",
+          "detail": "Captured 2026-11-14T13:00:07.735Z."
+        },
+        {
+          "id": "nonce_derivation",
+          "label": "Challenge was derived from this request",
+          "status": "pass",
+          "detail": "nonce = SHA-256(domain ‖ salt ‖ request hash) recomputes to 36255008b5fbd5a8…"
+        },
+        {
+          "id": "request_bound",
+          "label": "Signed request is the challenged request",
+          "status": "pass",
+          "detail": "The request hash covered by the signature is the one the attestation challenge was derived from."
+        },
+        {
+          "id": "request_bytes",
+          "label": "Included request bytes match the signed hash",
+          "status": "pass",
+          "detail": "SHA-256 of the included request bytes equals the signed request hash."
+        },
+        {
+          "id": "response_bytes",
+          "label": "Included response bytes match the signed hash",
+          "status": "pass",
+          "detail": "SHA-256 of the included response bytes equals the signed response hash."
+        },
+        {
+          "id": "chat_id_bound",
+          "label": "Completion id comes from the signed response",
+          "status": "pass",
+          "detail": "Completion id 34af3bf6d7c64201bba3b66e is the id inside the signed response bytes."
+        },
+        {
+          "id": "signature_present",
+          "label": "Response signature available",
+          "status": "pass",
+          "detail": "Signature retrieved for this completion ID."
+        },
+        {
+          "id": "signature_kind",
+          "label": "Signer kind is the model TEE",
+          "status": "pass",
+          "detail": "signature_kind = provider_tee: signed inside the model-serving TEE."
+        },
+        {
+          "id": "signed_text",
+          "label": "Signature covers these exact bytes",
+          "status": "pass",
+          "detail": "Signed text = model ‖ SHA-256(request) ‖ SHA-256(response) for Qwen/Qwen3.6-35B-A3B-FP8."
+        },
+        {
+          "id": "signature_valid",
+          "label": "Signature is cryptographically valid",
+          "status": "pass",
+          "detail": "EIP-191 signature recovers 0xfdbd7952498b333206f360d71d97a1e0961e8ddf."
+        },
+        {
+          "id": "signer_attested",
+          "label": "Signer key is bound to attested hardware",
+          "status": "pass",
+          "detail": "Signer matches exactly one model report verified before the request (ecdsa 0xfdbd7952498b333206f360d71d97a1e0961e8ddf)."
+        }
+      ],
+      "verdict": "VERIFIED"
+    }
+  ],
+  "gateway": {
+    "signing_address": "0xb98a789cdc4817275f5155593ba73ef2a957e779",
+    "signing_algo": "ecdsa",
+    "app_id": "f550fdfb4eb8ad787c1bcd423f091cbb4a4431ae",
+    "os_image_hash": "8db40cb23008d6213668b5816702d100b37b859a8a5bfd18d938ae3a1b3715bd",
+    "tls_spki_sha256": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad",
+    "compose_hash": "2643bc7ae47ecf4cf84509a647d2c2cc3bcacad95a87b8a73d543e6c48ad3b22",
+    "image_digests": [
+      "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
+      "sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412",
+      "sha256:4cde8bc2e09b78452a2b7c6706a4072c7a46417d56eef8e75ccd6b6d91640ffb",
+      "sha256:83c456476bc88c4f7b59fdc1afc8760606d736268038d3439cf1a37e707d7dc7"
+    ],
+    "quote": {
+      "report_type": "td10",
+      "tcb_status": "UpToDate",
+      "advisory_ids": [],
+      "mr_td": "7fe60787222bd394cb516abca2435f22f035ab2cc9c0a4b4b3b148e46297f3d931a237b72f359052c6e657d8c1409173",
+      "rtmr0": "d090162bff4b1d1dc74dc59dc548838efc4b811b173da8536efa8e2a9c045da70ee092301293ad90afebee448bcd0211",
+      "rtmr1": "4ae609807c765916a31d724786ed74bcb97e168a9d937b04936aeef2015c907eba5ac352c6bcd749c246fd62ffb659ec",
+      "rtmr2": "764489f277a8540189761e72b4238ba36d4d647e11bd958d8ab5522af2a4867b0ff63e06b0c4967f1857236244040a5d",
+      "rtmr3": "74ea3e995d95b03058291f49cef0e1a05db746c4942b91478be6f7050b13434af6059ca038ac7821edffcbe7c8d4de8f",
+      "mr_config_id": "012643bc7ae47ecf4cf84509a647d2c2cc3bcacad95a87b8a73d543e6c48ad3b22000000000000000000000000000000",
+      "report_data": "573ac99c056c17a173d626fc7bb211bd07ae78eb79380a9faa155548ba72c9f936255008b5fbd5a8181eb18998a67d2a8cb4d56b0928c2ca6d9943fd7f628360",
+      "td_attributes": "0000001000000000"
+    }
+  },
+  "model_tee": {
+    "candidate_index": 0,
+    "candidates_returned": 1,
+    "candidates_verified": 1,
+    "signing_address": "0xfdbd7952498b333206f360d71d97a1e0961e8ddf",
+    "signing_algo": "ecdsa",
+    "app_id": "2c0a0c96cb6dbd659bf1446e2f3fce58172ff91b",
+    "os_image_hash": "91fd5d69ccee3e5ea4f2aeb8c9b632c4358c4ecfc29ba1aa6fb1e402af209829",
+    "compose_hash": "e8416a02d6f7ce47baaa52e3925b934fd30834b04fc9086b363db9b1d12c729d",
+    "image_digests": [
+      "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
+      "sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb",
+      "sha256:a0c073085684e12e19f31bb279fc8da663a374199bfecc47b04167ae79eaa766",
+      "sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085",
+      "sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be"
+    ],
+    "quote": {
+      "report_type": "td10",
+      "tcb_status": "UpToDate",
+      "advisory_ids": [],
+      "mr_td": "df4d77c857de652bd0fafa343a2026b51071ee03773d076d283abf1a7d36ff91ffa279ee4a617ac664f7e2a2c8d5891b",
+      "rtmr0": "bc122d143ab768565ba5c3774ff5f03a63c89a4df7c1f5ea38d3bd173409d14f8cbdcc36d40e703cccb996a9d9687590",
+      "rtmr1": "4ae609807c765916a31d724786ed74bcb97e168a9d937b04936aeef2015c907eba5ac352c6bcd749c246fd62ffb659ec",
+      "rtmr2": "bd67ab7554dc27ab03a077bc1447a1a67d0624ff547c4c809a8626f12d6a89712f8ec60e781e99b98208574065d21a71",
+      "rtmr3": "bbada8ce4eb49dcf9d67f987f8ce6a3a3a59e8e86374180075aa12b4cdad6b06234acb1e044902cbcac130993ef9bb46",
+      "mr_config_id": "01e8416a02d6f7ce47baaa52e3925b934fd30834b04fc9086b363db9b1d12c729d000000000000000000000000000000",
+      "report_data": "cd6a49c16b670e75437951c5babaf65ca6be29d76c3e934b8f43b895b4a9460c36255008b5fbd5a8181eb18998a67d2a8cb4d56b0928c2ca6d9943fd7f628360",
+      "td_attributes": "0000001000000000"
+    },
+    "gpu": {
+      "count": 8,
+      "arch": "GH100",
+      "source": "NVIDIA-signed per-GPU claims, matched to the reported device certificates",
+      "driver_versions": [
+        "595.58.03"
+      ],
+      "nras_iat": 1794661210,
+      "nras_jti": "128c4876-1e33-4c76-8275-b9a27d368c0b",
+      "nras_eat_nonce": "36255008b5fbd5a8181eb18998a67d2a8cb4d56b0928c2ca6d9943fd7f628360"
+    }
+  },
+  "not_proven": [
+    "That the model’s security analysis is correct. AI triage is a recommendation; attestation describes how it ran, not whether its conclusions are right.",
+    "That NEAR AI Cloud does not retain prompts. Attestation identifies measured software; it does not audit retention behaviour of that software.",
+    "End-to-end encryption to the model. TLS terminates in the attested gateway TEE; the gateway then forwards to the model TEE over a channel this receipt does not verify.",
+    "Which serving instance answered. Instances of one model share a signing key and may run different measured configurations, so the signature identifies the model deployment’s key, not the attested instance.",
+    "Image or model-weight provenance. Container digests and an app compose are measured and displayed, but not checked against a source-build or model-weight allowlist; any compose of the pinned NEAR app is accepted.",
+    "That NEAR’s pinned software is free of vulnerabilities or behaves as published. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software.",
+    "Freshness today. A recorded receipt is a historical appraisal against archived Intel/NVIDIA collateral at capture time, not a current revocation check.",
+    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost."
+  ],
+  "trust_assumptions": [
+    "Intel TDX hardware and Intel’s attestation signing root (DCAP / PCS).",
+    "NVIDIA confidential-computing GPUs, NVIDIA’s Device Identity CA (pinned to NVIDIA’s published root) and NRAS signing keys (intermediates pinned on first observation; no full NVIDIA certificate-revocation policy).",
+    "NEAR AI Cloud as operator: its measured software (dstack, gateway, model server, management components), its deployment and key-provisioning governance, and its gateway-to-model channel.",
+    "The PrivateTriage backend you run: it holds the API key, sees your report in plaintext, performs these checks, and records the connection observations (socket ids, peer certificates, timings) that offline verification cannot re-observe.",
+    "WebPKI for the TLS connections to Intel PCS, NVIDIA NRAS and NEAR AI Cloud."
+  ]
+}
