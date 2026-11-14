@@ -7,6 +7,10 @@ import { Pipeline } from './Pipeline.tsx';
 import { AnalysisView, EvidenceView, VerdictBanner, VerificationView } from './Results.tsx';
 import { TamperLab } from './TamperLab.tsx';
 import type { BackendStatus, DemoData, StageEvent, TriageRun } from './types.ts';
+
+// The hosted static build (GitHub Pages, VITE_STATIC_DEMO=1) never contacts a backend:
+// there is no live-inference path in it, only the recorded guided demo.
+const STATIC_DEMO = import.meta.env.VITE_STATIC_DEMO === '1';
 import { short } from './ui.tsx';
 
 type Tab = 'analysis' | 'verification' | 'evidence';
@@ -38,6 +42,7 @@ export function App() {
         setBody(s.body);
       })
       .catch(() => setLoadError('Could not load the recorded demo data.'));
+    if (STATIC_DEMO) return;
     fetch('api/status')
       .then((r) => (r.ok ? (r.json() as Promise<BackendStatus>) : null))
       .then((s) => setStatus(s))

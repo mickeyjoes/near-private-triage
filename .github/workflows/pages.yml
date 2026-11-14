@@ -26,6 +26,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          VITE_STATIC_DEMO: '1' # static guided demo: the app never contacts an API
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
