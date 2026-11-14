@@ -94,7 +94,7 @@ The final audit (2026-11-14) verdict was "fix before publication". All four medi
 
 - **File:** `~/Dev/Hackathons/NEAR/privatetriage-video/final/privatetriage-demo.mp4`.
 - **First cut** (recorded at `c747d69`): archived as `final/archive/privatetriage-demo-c747d69.*`. **Not accurate after the audit** (42 checks, "21 attacks … re-verified", "detected — and ignored", "proves where the model runs", mismatched commits).
-- **Corrected cut:** a bounded correction with no new inference. The live segment is kept with corrected narration and a lower third disclosing that it was recorded at `c747d69`. The guided-demo and terminal scenes are re-captured from the fixed build (`9a74df7`). Status and validation: see `docs/SUBMISSION.md` §3.
+- **Corrected cut (produced and validated 2026-11-14):** 1:54.97. A bounded correction with no new inference. The live segment is kept with corrected narration and lower thirds disclosing that it was recorded at `c747d69` (its old on-screen banner wording and "42 checks" hero are visible but not spoken). The guided-demo and terminal scenes are re-captured from the fixed build (`9a74df7`). Codec, loudness, OCR privacy, facts and sync checks pass. Details are in `docs/SUBMISSION.md` §3.
 - **Owner:** watch and listen once before posting.
 
 ## CODE

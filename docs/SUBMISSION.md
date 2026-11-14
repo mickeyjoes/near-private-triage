@@ -36,7 +36,7 @@ Optional tags per the rules: @NearLegion and @NearBuilders.
 `~/Dev/Hackathons/NEAR/privatetriage-video/final/privatetriage-demo.mp4` (local, unpublished; made with the dvk kit / `demo-video` skill).
 
 - **First cut** (1:50, recorded at `c747d69`) is archived as `final/archive/privatetriage-demo-c747d69.*`. After the 2026-11-14 audit it is **no longer accurate**: it says "42 checks" and "21 attacks … each re-verified" (the Tamper lab reveals build-time results), shows the old "detected — and ignored" card, says the hardware "proves where the model runs", and its terminal scene mixes up two commits.
-- **Corrected cut** (bounded correction, no new inference): the live NEAR AI Cloud segment (s01–s03) is kept as recorded, with corrected narration and a lower third disclosing it was recorded at `c747d69`; the guided-demo scenes (injection, Verification, Tamper lab, Fail closed) and the clean-clone terminal (`9a74df7`) are re-captured from the fixed build; numbers become 47 checks and 26 attacks (21 FAILED, 5 UNVERIFIED); the end card says "Research prototype · not production-ready". The narration script is `narration/SCRIPT.md` in the video project.
+- **Corrected cut — produced 2026-11-14** (bounded correction, no new inference): 1:54.97, 1920×1080, H.264/AAC, `.en.srt` subtitles. The live NEAR AI Cloud segment (s01–s03) is kept as recorded, with corrected narration and lower thirds disclosing "RECORDED AT c747d69 (UI WORDING SINCE CORRECTED)" — that footage still shows the old banner wording and "42 checks" in the hero, which is not spoken. The guided-demo scenes (injection, Verification, Tamper lab, Fail closed) and the clean-clone terminal (`9a74df7`: 47 ✓, VERDICT: VERIFIED, receipt: MATCHES) are re-captured from the fixed build; the narration says 47 checks and 26 tested attacks (21 fail, 5 unverified) "computed when the site was built"; the end card says "Research prototype · not production-ready". Validation: codec, loudness (−16.1 LUFS), OCR privacy scan, on-screen facts, `dvk facts` and A/V sync all pass. Narration is AI voice (disclosed); **the owner should listen once** before posting. Script: `narration/SCRIPT.md` in the video project.
 
 ## 4. Hosted read-only demo (optional, owner decision)
 
@@ -80,7 +80,7 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 | **Pursewarden README names PrivateTriage (Q-015)** | ⏳ owner: add the line in docs/PURSEWARDEN_DIFFERENCE.md |
 | Create the GitHub repository and push | ✅ https://github.com/mickeyjoes/near-private-triage (pushed 2026-11-14) |
 | **Make the repository public** (required by 2026-11-14T23:59Z) | ⏳ owner |
-| Demo video | ⏳ corrected cut (see §3); owner listens and approves |
+| Demo video | ✅ corrected cut produced and validated (see §3); ⏳ owner listens and approves |
 | Publish the X post | ⏳ owner |
 | Optional: enable Pages and run the manual Pages workflow | ⏳ owner |
 | Submit (one attempt per repo) | ⏳ owner confirms the exact payload |
