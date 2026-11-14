@@ -2,6 +2,7 @@
 import type { ReactElement } from 'react';
 import * as I from './icons.tsx';
 import type { Receipt, StageEvent } from './types.ts';
+import { attribution } from './attribution.ts';
 import { short } from './ui.tsx';
 
 type StepState = 'pending' | 'active' | 'done' | 'failed' | 'skipped';
@@ -92,7 +93,7 @@ function stepDetail(key: string, stages: StageEvent[], r: Receipt | null): strin
     case 'inference':
       return tx === 'sent' ? r.model : tx === 'may_have_been_sent' ? 'Report MAY have been sent — no response received' : null;
     case 'signature':
-      return r.signer?.address ? `${r.signer.kind} · ${short(r.signer.address, 4)}` : null;
+      return r.signer?.address ? `${attribution(r).signerPrefix}${r.signer.kind} · ${short(r.signer.address, 4)}` : null;
     case 'verdict':
       return r.verdict;
     default:

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cvss31, type Triage } from '../../shared/triage.ts';
+import { attribution } from './attribution.ts';
 import { download, shareableEvidence, slug, triageMarkdown } from './exporters.ts';
 import * as I from './icons.tsx';
 import type { AnalystNote, EvidenceBundle, Receipt, TriageRun } from './types.ts';
@@ -132,6 +133,7 @@ function List({ title, items: raw, empty }: { title: string; items: string[]; em
 export function AnalysisView({ run }: { run: TriageRun }) {
   const o = run.outcome;
   const t = o?.triage;
+  const a = attribution(run.receipt);
   if (!t) {
     const tx = run.receipt.transmission;
     return (
@@ -154,9 +156,9 @@ export function AnalysisView({ run }: { run: TriageRun }) {
   const noteFor = (text: string) => notes.find((n) => text.includes(n.quote));
   return (
     <div className="analysis">
-      <div className="ai-note">
-        <I.Spark size={15} />
-        AI-generated triage recommendation, parsed from the signed response. Treat as a second opinion for a human analyst — the cryptographic checks cover execution, not judgement.
+      <div className={a.ok ? 'ai-note' : 'ai-note ai-note-unverified'}>
+        {a.ok ? <I.Spark size={15} /> : <I.Alert size={15} />}
+        {a.analysis}
       </div>
       <ProvenanceLine run={run} />
       <div className="analysis-top">
@@ -268,7 +270,7 @@ export function AnalysisView({ run }: { run: TriageRun }) {
         <Disclosure
           summary={
             <span>
-              Model reasoning <span className="muted">· {o!.usage?.reasoning_tokens.toLocaleString() ?? '?'} tokens · part of the signed response</span>
+              Model reasoning <span className="muted">· {o!.usage?.reasoning_tokens.toLocaleString() ?? '?'} tokens · {a.reasoning}</span>
             </span>
           }
         >
@@ -318,6 +320,7 @@ function Fact({ k, children }: { k: string; children: React.ReactNode }) {
 }
 
 export function VerificationView({ receipt: r }: { receipt: Receipt }) {
+  const a = attribution(r);
   const g = r.gateway;
   const m = r.model_tee;
   return (
@@ -363,6 +366,7 @@ export function VerificationView({ receipt: r }: { receipt: Receipt }) {
           <h4>
             <I.ShieldCheck size={16} /> What a VERIFIED receipt proves
           </h4>
+          {r.verdict !== 'VERIFIED' ? <p className="muted small">This receipt is {r.verdict}: none of the statements below is established for this run.</p> : null}
           <ul className="bullets">
             <li>The NEAR AI Cloud gateway that terminated your TLS session runs NEAR’s pinned dstack OS image and app identity in a genuine, non-debug Intel TDX enclave with up-to-date platform firmware.</li>
             <li>Every model enclave NEAR returned runs in a separate Intel TDX enclave{m?.gpu ? ` with ${m.gpu.count} NVIDIA ${m.gpu.arch} GPUs` : ''}; each GPU report is signed by a genuine NVIDIA GPU, and NVIDIA’s signed per-GPU appraisal of exactly those devices reports confidential-computing measurements that match. Enclaves and GPUs answered a challenge derived from the exact request.</li>
@@ -403,7 +407,7 @@ export function VerificationView({ receipt: r }: { receipt: Receipt }) {
           <Fact k="Completion ID">
             <code>{r.chat_id ?? '—'}</code>
           </Fact>
-          <Fact k="Response signer">{r.signer?.address ? <span>{r.signer.kind} · {r.signer.algo} · <CopyHash value={r.signer.address} n={6} /></span> : '—'}</Fact>
+          <Fact k="Response signer">{r.signer?.address ? <span>{a.signerPrefix}{r.signer.kind} · {r.signer.algo} · <CopyHash value={r.signer.address} n={6} /></span> : '—'}</Fact>
           <Fact k="Model enclave key">
             <CopyHash value={m?.signing_address} n={6} />
           </Fact>
@@ -527,7 +531,9 @@ npm run verify -- ${name}.evidence-full.json
 #    recorded TLS observations, nonce derivation, and the
 #    enclave's ECDSA signature over the hashes.`}</pre>
         <p className="muted small">
-          The shareable bundle verifies too: the enclave signed the <em>hashes</em>, so evidence can be published without revealing the report. The request hash <code>{short(run.receipt.request_sha256, 8)}</code> covers the complete serialized API request — system prompt, a random report marker, model, parameters and the report — not the report text alone, so checking it needs the exact request bytes (included in the full evidence export).
+          {run.receipt.verdict === 'VERIFIED'
+            ? <>The shareable bundle verifies too: the enclave signed the <em>hashes</em>, so evidence can be published without revealing the report.</>
+            : <>The shareable bundle omits the report and response bytes; this receipt is <strong>{run.receipt.verdict}</strong>, and re-verifying does not change that.</>} The request hash <code>{short(run.receipt.request_sha256, 8)}</code> covers the complete serialized API request — system prompt, a random report marker, model, parameters and the report — not the report text alone, so checking it needs the exact request bytes (included in the full evidence export).
         </p>
       </div>
     </div>

@@ -7,9 +7,11 @@ import { ANALYST_NOTES } from '../shared/annotations.ts';
 import { SAMPLES } from '../shared/samples.ts';
 import { deriveRecordedRun, ReplayIntegrityError, type SavedRun } from '../server/triage/replay.ts';
 import { interpretResponse } from '../server/triage/triage.ts';
-import type { EvidenceBundle } from '../server/verifier/evidence.ts';
+import { evaluateBundle, type EvidenceBundle } from '../server/verifier/evidence.ts';
+import { SCENARIOS } from '../server/verifier/tamper.ts';
+import { attribution, responseAuthenticated } from '../web/src/attribution.ts';
 import { triageMarkdown, untrusted } from '../web/src/exporters.ts';
-import type { TriageRun } from '../web/src/types.ts';
+import type { Receipt, TriageRun } from '../web/src/types.ts';
 
 const load = <T>(p: string) => JSON.parse(readFileSync(p, 'utf8')) as T;
 const sample = (id: string) => SAMPLES.find((s) => s.id === id)!;
@@ -108,5 +110,68 @@ describe('exports treat model output as untrusted', () => {
     assert.equal(untrusted('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
     assert.equal(untrusted('![x](https://evil.example/p.png)'), '!\\[x]\\(https://evil.example/p.png)');
     assert.equal(untrusted('[a](b)'), '[a]\\(b)');
+  });
+});
+
+// Delta review D1: "signed by the attested enclave" wording only when the receipt proves it.
+// The analysis panel stays reachable when a structurally valid response arrives but its
+// signature is missing (e.g. the F1 fail-closed path) or comes from an unattested key.
+describe('signed-enclave attribution is gated on verification (delta review D1)', () => {
+  const genuine = () => deriveRecordedRun(sample('lumora-staking'), ev('lumora-staking'), saved('lumora-staking'));
+  // The live path: the analysis is parsed from received bytes, the receipt is whatever the verifier says.
+  const liveRun = (b: EvidenceBundle): TriageRun => {
+    const receipt = evaluateBundle(b).receipt;
+    return { ...(genuine() as unknown as TriageRun), receipt: receipt as unknown as Receipt, analyst_notes: [], provenance: { kind: 'live', captured_at: receipt.captured_at, analysis: 'test fixture', response_sha256: receipt.response_sha256 } } as unknown as TriageRun;
+  };
+  const SIGNED = [/Signed by the model deployment’s enclave key/, /signed by the attested model enclave/, /parsed from the signed response/];
+  const assertUnattributed = (run: TriageRun) => {
+    const a = attribution(run.receipt);
+    assert.equal(a.ok, false);
+    assert.doesNotMatch(a.analysis, /signed response/);
+    assert.match(a.analysis, /authenticity is NOT verified/);
+    assert.match(a.reasoning, /authenticity not verified/);
+    assert.equal(a.signerPrefix, 'claimed, unverified · ');
+    const md = triageMarkdown(run, 'fictional sample');
+    for (const re of SIGNED) assert.doesNotMatch(md, re);
+    assert.match(md, /Authenticity NOT verified/);
+    return md;
+  };
+
+  it('genuine VERIFIED run: attributed to the attested model enclave', () => {
+    const run = genuine() as unknown as TriageRun;
+    const a = attribution(run.receipt);
+    assert.equal(a.ok, true);
+    assert.match(a.analysis, /parsed from the signed response/);
+    const md = triageMarkdown(run, 'fictional sample');
+    assert.match(md, /> Signed by the model deployment’s enclave key `0x/);
+    assert.match(md, /parsed from the response bytes signed by the attested model enclave’s key/);
+    assert.doesNotMatch(md, /Claimed signer|Authenticity NOT verified/);
+  });
+
+  it('missing signature (UNVERIFIED, analysis present): no signed wording, no signer line', () => {
+    const b = ev('lumora-staking');
+    b.signature = null;
+    const run = liveRun(b);
+    assert.equal(run.receipt.verdict, 'UNVERIFIED');
+    assert.ok(run.outcome?.triage, 'the analysis panel is still reachable');
+    const md = assertUnattributed(run);
+    assert.doesNotMatch(md, /Signed by|Claimed signer/);
+    assert.match(md, /What a VERIFIED receipt would prove — this receipt is UNVERIFIED, so none of it is established for this run/);
+  });
+
+  it('signature by an unattested key (FAILED): the address is a claimed, unverified signer', () => {
+    const forged = SCENARIOS.find((x) => x.id === 'forged_signer')!.apply(ev('lumora-staking'), { other: ev('quillmark-ssrf') });
+    const run = liveRun(forged);
+    assert.equal(run.receipt.verdict, 'FAILED');
+    const addr = run.receipt.signer!.address!;
+    const md = assertUnattributed(run);
+    assert.ok(md.includes(`> Claimed signer \`${addr}\` — UNVERIFIED: not authenticated as the attested model enclave’s key`));
+  });
+
+  it('a valid signature does not make the signer "the attested enclave key" if the attestation failed', () => {
+    const r = genuine().receipt as unknown as Receipt;
+    assert.equal(responseAuthenticated(r), true);
+    assert.equal(responseAuthenticated({ ...r, verdict: 'FAILED' }), false);
+    assert.equal(responseAuthenticated({ ...r, properties: r.properties.map((p) => (p.id === 'response_signature' ? { ...p, verdict: 'UNVERIFIED' as const } : p)) }), false);
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HowItWorks, Refusals } from './Boundary.tsx';
+import { responseAuthenticated } from './attribution.ts';
 import { Composer } from './Composer.tsx';
 import * as I from './icons.tsx';
 import { Pipeline } from './Pipeline.tsx';
@@ -204,7 +205,7 @@ export function App() {
             </div>
             <div className="hp">
               <span className="hp-k">Model enclave signer</span>
-              <span className="hp-v mono">{short(g1.signer?.address, 6)}</span>
+              <span className="hp-v mono">{responseAuthenticated(g1) ? short(g1.signer?.address, 6) : 'not authenticated'}</span>
             </div>
             <div className="hp">
               <span className="hp-k">GPU attestation (NVIDIA-signed)</span>
