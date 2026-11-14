@@ -120,7 +120,7 @@ export function Pipeline({ stages, receipt, running, source }: { stages: StageEv
       <div className="card-head">
         <div>
           <div className="card-title">Disclosure gate</div>
-          <div className="card-sub">Attest before you disclose — the report never leaves the backend unless the hardware proves itself first.</div>
+          <div className="card-sub">Attest before you disclose — the report never leaves the backend unless the gateway, model and GPU attestation checks pass first.</div>
         </div>
         {source ? <span className={`source source-${source}`}>{source === 'recorded' ? 'Recorded genuine run' : 'Live run'}</span> : null}
       </div>

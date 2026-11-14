@@ -47,10 +47,10 @@ export function Refusals({ data, live }: { data: DemoData; live: boolean }) {
             <VerdictBadge v="UNVERIFIED" compact />
           </div>
           <p className="small">
-            During development NVIDIA’s attestation service was unreachable or timed out {data.outages.length} times. Each time the GPU verdict could not be confirmed, so the (fictional) report was held back — the pipeline never “falls back” to sending.
+            During development NVIDIA’s attestation service was unreachable or timed out {data.outages.length} times. Each time the GPU verdict could not be confirmed, so the (fictional) report was held back before any request was made — the pipeline never “falls back” to sending.
           </p>
           <div className="refusal-foot">
-            <span className="sent-no">Reports sent: 0 of {data.outages.length}</span>
+            <span className="sent-no">Reports sent: {data.outages.filter((o) => o.transmission !== 'not_sent').length} of {data.outages.length}</span>
           </div>
         </div>
       </div>
@@ -99,7 +99,7 @@ export function HowItWorks() {
         <div className="flow-node trust">
           <I.Server size={22} />
           <strong>PrivateTriage backend</strong>
-          <span>Holds API key · sees plaintext · verifies · stores nothing</span>
+          <span>Holds API key · sees plaintext · verifies · writes no reports to disk</span>
         </div>
         <div className="flow-edge verified">
           <span>TLS key ∈ attested enclave · same socket</span>
@@ -129,14 +129,14 @@ export function HowItWorks() {
           <h4>
             <I.Gate size={17} /> Attest, then disclose
           </h4>
-          <p>Attestation is fetched without the API key over a pinned TLS connection. Only if the gateway, model and GPU evidence all verify is the report sent — over that same connection, whose certificate key the gateway quote commits to.</p>
+          <p>Attestation is fetched without the API key over a pinned TLS connection. Only if the gateway, every model enclave and its GPU evidence verify is the report sent — over that same connection, whose certificate key the gateway quote commits to. The signature fetch reuses it too; any request carrying the key is refused on any other connection. If a send fails, the receipt says “may have been sent”, never “withheld”.</p>
         </div>
         <div className="block">
           <h4>
             <I.Signature size={16} /> Model-enclave signature
           </h4>
           <p>
-            Non-streaming, canonical model ID, <code>x-no-aliasing</code> — so the <em>model</em> TEE (not the gateway) signs <code>model:sha256(req):sha256(resp)</code>. The signer must match exactly one model report verified before the request.
+            Non-streaming, canonical model ID, <code>x-no-aliasing</code> — so the <em>model</em> TEE (not the gateway) signs <code>model:sha256(req):sha256(resp)</code>, where <code>req</code> is the whole serialized API request. The signer must match a model report verified before the request; instances of a model share that key.
           </p>
         </div>
         <div className="block">
@@ -149,13 +149,13 @@ export function HowItWorks() {
           <h4>
             <I.Terminal size={16} /> Offline re-verification
           </h4>
-          <p>Evidence bundles archive Intel collateral, the NVIDIA token and JWKS, and the signature. <code>npm run verify</code> recomputes the receipt byte-for-byte with no key and no network.</p>
+          <p>Evidence bundles archive Intel collateral, the raw GPU reports, NVIDIA’s platform and per-GPU tokens with their JWKS, and the signature. <code>npm run verify</code> recomputes the receipt byte-for-byte with no key and no network — a historical appraisal, not a current revocation check.</p>
         </div>
         <div className="block">
           <h4>
             <I.Eye size={16} /> Honest limits
           </h4>
-          <p>Not end-to-end encrypted to the model (TLS ends in the gateway enclave). Not a no-retention guarantee. Not a correctness guarantee for the AI’s judgement. The backend you run sees plaintext.</p>
+          <p>Not end-to-end encrypted to the model (TLS ends in the gateway enclave; the gateway-to-model hop is NEAR’s). Not a no-retention guarantee. Not proof of which model instance answered. Not a correctness guarantee for the AI’s judgement. The backend you run sees plaintext.</p>
         </div>
       </div>
     </section>

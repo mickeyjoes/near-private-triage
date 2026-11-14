@@ -274,7 +274,7 @@
     },
     {
       "id": "response_signature",
-      "title": "Response was signed by the model deployment’s enclave key",
+      "title": "Response signed by the model deployment’s enclave key",
       "statement": "A key that the attested model enclave vouches for signed SHA-256 hashes of the exact serialized API request (system prompt, report, model and parameters) and the exact response bytes; the attestation challenge was derived from that same request. Checked after the response, so it cannot gate disclosure.",
       "checks": [
         {

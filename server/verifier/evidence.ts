@@ -427,7 +427,7 @@ export function evaluateBundle(
     const i = sigChecks.findIndex((c) => c.id === 'signature_present' && c.status !== 'pass');
     if (i >= 0) sigChecks[i] = { ...sigChecks[i]!, detail: b.signature_error };
   }
-  properties.push(prop('response_signature', 'Response was signed by the model deployment’s enclave key',
+  properties.push(prop('response_signature', 'Response signed by the model deployment’s enclave key',
     'A key that the attested model enclave vouches for signed SHA-256 hashes of the exact serialized API request (system prompt, report, model and parameters) and the exact response bytes; the attestation challenge was derived from that same request. Checked after the response, so it cannot gate disclosure.', sigChecks));
 
   const verdict = combineVerdicts(properties.map((p) => p.verdict));
@@ -437,8 +437,8 @@ export function evaluateBundle(
     verdict === 'VERIFIED'
       ? 'Confidential execution verified: attested gateway and GPU-backed model TEE; response signed by the model deployment’s enclave key.'
       : verdict === 'FAILED'
-        ? `Verification FAILED: ${failed.join('; ')}.`
-        : `Not verified: ${unverified.join('; ')}.`;
+        ? `Verification FAILED — property failed: ${failed.map((t) => `“${t}”`).join('; ')}.`
+        : `Not verified — evidence missing for: ${unverified.map((t) => `“${t}”`).join('; ')}.`;
 
   const chosenOne = chosen.length === 1 ? chosen[0]! : null;
   const tx = transmissionOf(b, pre.ok);
