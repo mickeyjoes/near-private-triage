@@ -48,7 +48,7 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
   return (
     <section id="tamper" className="section">
       <SectionHead eyebrow="Tamper lab" title="Attack the evidence. Watch it fail closed.">
-        Each scenario modifies the <strong>genuine</strong> evidence of the recorded {baseLabel} run — editing the verdict, replaying old attestations, forging keys, intercepting TLS — and re-runs the same verifier. Nothing short of genuine evidence yields a verified result.
+        Each scenario modifies the <strong>genuine</strong> evidence of the recorded {baseLabel} run — editing the verdict, replaying old attestations, forging keys and GPU reports, intercepting TLS — and runs the same verifier on it. The results below were computed when this site was built (and again by <code>npm test</code>); clicking reveals them, it does not re-run the verifier in your browser. These are the attacks we tested, not a proof that no other attack exists.
       </SectionHead>
       <div className="lab">
         <div className="lab-list card">
@@ -63,7 +63,7 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
               setRevealed(new Set());
               setAuto(true);
             }} disabled={auto}>
-              <I.Play size={14} /> Run all
+              <I.Play size={14} /> Reveal all
             </button>
           </div>
           <div className="lab-legend">
@@ -82,7 +82,7 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
                   }}
                 >
                   <span className="lab-title">{x.title}</span>
-                  {revealed.has(x.id) ? <VerdictBadge v={x.verdict} compact /> : <span className="lab-pending">try it</span>}
+                  {revealed.has(x.id) ? <VerdictBadge v={x.verdict} compact /> : <span className="lab-pending">reveal</span>}
                 </button>
               </li>
             ))}
@@ -119,12 +119,12 @@ export function TamperLab({ results, baseLabel }: { results: TamperResult[]; bas
                   ))}
                 </div>
                 <p className="muted small">
-                  Overall: <strong>{r.verdict}</strong> — {r.headline} Reproduce: <code>npm test</code>
+                  Overall: <strong>{r.verdict}</strong> — {r.headline} Computed at build time; reproduce with <code>npm test</code>.
                 </p>
               </>
             ) : (
               <button type="button" className="btn btn-primary" onClick={() => setRevealed((s) => new Set(s).add(r.id))}>
-                <I.Play size={15} /> Apply attack &amp; re-verify
+                <I.Play size={15} /> Show build-time verification result
               </button>
             )}
           </div>

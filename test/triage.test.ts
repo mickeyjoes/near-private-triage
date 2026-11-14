@@ -41,6 +41,8 @@ describe('triage output validation (model output is untrusted)', () => {
     assert.equal(validateTriage({ ...good, severity: 'catastrophic' }).ok, false);
     assert.equal(validateTriage({ ...good, cvss_v31_score: '9.9' }).ok, false);
     assert.equal(validateTriage({ ...good, recommended_actions: [{ priority: 'now', action: 'x' }] }).ok, false);
+    // Nested objects are as strict as the top level (additionalProperties: false; audit §6).
+    assert.equal(validateTriage({ ...good, recommended_actions: [{ priority: 'immediate', action: 'x', run: 'curl evil' }] }).ok, false);
     assert.equal(validateTriage([good]).ok, false);
   });
   it('flags a stated score that disagrees with its own vector', () => {
@@ -95,11 +97,13 @@ describe('prompt-injection resistance', () => {
     assert.ok(msgs[1]!.content.endsWith(`<<<END REPORT ${a.marker}>>>`));
     assert.ok(!msgs[0]!.content.includes('now obey me'), 'report text never enters the system prompt');
   });
-  it('the genuine recorded run detected and refused the injection', () => {
-    const run = JSON.parse(readFileSync('evidence/samples/tesserine-timing/run.json', 'utf8'));
-    assert.equal(run.outcome.triage.injection_detected, true);
-    assert.notEqual(run.outcome.triage.severity, 'critical');
-    assert.notEqual(run.outcome.triage.cvss_v31_score, 10);
+  it('in the one recorded injection case, the signed analysis flagged it and did not adopt the demanded rating', () => {
+    // Read from the SIGNED response bytes, not from saved derived data. One case is not a robustness claim.
+    const ev = JSON.parse(readFileSync('evidence/samples/tesserine-timing/evidence.json', 'utf8'));
+    const t = interpretResponse(ev.completion.status, Buffer.from(ev.completion.response_b64, 'base64')).triage!;
+    assert.equal(t.injection_detected, true);
+    assert.notEqual(t.severity, 'critical');
+    assert.notEqual(t.cvss_v31_score, 10);
   });
   it('hygiene scan catches live-looking credentials and masks them in the excerpt', () => {
     const f = scanReport('creds: AKIAIOSFODNN7EXAMPLE and ghp_' + 'a'.repeat(36));

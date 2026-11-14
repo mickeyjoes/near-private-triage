@@ -19,7 +19,7 @@ const STEPS: Step[] = [
   { key: 'model', title: 'Model + GPU attestation', sub: 'Model TDX quote · NVIDIA confidential-computing verdict', icon: <I.Gpu size={17} /> },
   { key: 'gate', title: 'Disclosure gate', sub: 'Report released only if every check above passed', icon: <I.Gate size={17} /> },
   { key: 'inference', title: 'Confidential inference', sub: 'Sent over the same attested TLS session', icon: <I.Lock size={17} /> },
-  { key: 'signature', title: 'Enclave signature', sub: 'Model TEE signs SHA-256 of request & response', icon: <I.Signature size={17} /> },
+  { key: 'signature', title: 'Enclave signature', sub: 'Model-enclave key signs SHA-256 of request & response (fetched on the same session)', icon: <I.Signature size={17} /> },
   { key: 'verdict', title: 'Independent verdict', sub: 'Every claim re-checked, fail-closed', icon: <I.ShieldCheck size={17} /> },
 ];
 
@@ -53,7 +53,8 @@ function deriveStates(stages: StageEvent[], receipt: Receipt | null, running: bo
     return st;
   }
   if (seen.has('verdict')) {
-    if (st[4] === 'active') st[4] = receipt?.disclosed ? 'done' : 'failed';
+    // "done" only if a response came back; a failed exchange is never shown as "not sent".
+    if (st[4] === 'active') st[4] = receipt?.transmission === 'sent' && receipt.response_sha256 ? 'done' : 'failed';
     st[5] = prop('response_signature') === 'VERIFIED' ? 'done' : 'failed';
     st[6] = receipt?.verdict === 'VERIFIED' ? 'done' : 'failed';
   }
@@ -72,9 +73,10 @@ function stepDetail(key: string, stages: StageEvent[], r: Receipt | null): strin
   const ev = (s: string) => stages.find((x) => x.stage === s);
   if (!r) {
     if (key === 'challenge') return ev('challenge')?.detail ?? null;
-    if (key === 'gate' && ev('blocked')) return 'Closed — report NOT sent';
+    if (key === 'gate' && ev('blocked')) return 'Closed — report not sent';
     return null;
   }
+  const tx = r.transmission;
   const q = r.gateway?.quote;
   switch (key) {
     case 'challenge':
@@ -83,12 +85,12 @@ function stepDetail(key: string, stages: StageEvent[], r: Receipt | null): strin
       return r.gateway?.signing_address ? `TCB ${q?.tcb_status ?? '?'} · signer ${short(r.gateway.signing_address, 4)}` : null;
     case 'model': {
       const g = r.model_tee?.gpu;
-      return r.model_tee?.signing_address ? `${g ? `${g.count}× ${g.arch ?? 'GPU'} · ` : ''}signer ${short(r.model_tee.signing_address, 4)}` : null;
+      return r.model_tee?.signing_address ? `${g ? `${g.count}× ${g.arch} (NVIDIA-signed) · ` : ''}signer ${short(r.model_tee.signing_address, 4)}` : null;
     }
     case 'gate':
-      return r.disclosed ? 'Open — attestation verified first' : 'Closed — report NOT sent';
+      return tx === 'not_sent' ? 'Closed — report not sent' : 'Open — attestation verified first';
     case 'inference':
-      return r.disclosed ? r.model : null;
+      return tx === 'sent' ? r.model : tx === 'may_have_been_sent' ? 'Report MAY have been sent — no response received' : null;
     case 'signature':
       return r.signer?.address ? `${r.signer.kind} · ${short(r.signer.address, 4)}` : null;
     case 'verdict':

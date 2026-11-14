@@ -45,3 +45,4 @@ export const Chevron = ({ size, ...p }: P) => base(size, p, <path d="M9 6l6 6-6 
 export const Server = ({ size, ...p }: P) =>
   base(size, p, [<rect key="a" x="3.5" y="4" width="17" height="7" rx="1.8" />, <rect key="b" x="3.5" y="13" width="17" height="7" rx="1.8" />, <path key="c" d="M7 7.5h.1M7 16.5h.1" />]);
 export const Browser = ({ size, ...p }: P) => base(size, p, [<rect key="a" x="3" y="4" width="18" height="16" rx="2.2" />, <path key="b" d="M3 8.5h18M6 6.3h.1M8.3 6.3h.1" />]);
+export const Clock = ({ size, ...p }: P) => base(size, p, [<circle key="a" cx="12" cy="12" r="9" />, <path key="b" d="M12 7v5l3 2" />]);

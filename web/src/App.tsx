@@ -143,7 +143,9 @@ export function App() {
     }
   };
 
-  const isRecordedSample = selected !== 'custom' && Boolean(data?.runs[selected]);
+  // A recording replays only for the exact sample text it was made from (edited text is a new report).
+  const sample = data?.samples.find((x) => x.id === selected);
+  const isRecordedSample = selected !== 'custom' && Boolean(data?.runs[selected]) && sample?.title === title && sample?.body === body;
   const onRun = () => (live ? runLive() : replay());
 
   if (loadError) return <div className="fatal">{loadError}</div>;
@@ -183,7 +185,7 @@ export function App() {
             you disclose.
           </h1>
           <p className="hero-lede">
-            An unpublished vulnerability report is the most sensitive document a security team handles. PrivateTriage sends it to an AI analyst <strong>only after</strong> Intel TDX and NVIDIA confidential-computing hardware prove where the model runs — then proves the model enclave signed the exact analysis you read.
+            An unpublished vulnerability report is the most sensitive document a security team handles. PrivateTriage sends it to an AI analyst <strong>only after</strong> Intel TDX and NVIDIA confidential-computing evidence for the gateway and model enclaves verifies — then checks that the model enclave’s key signed the exact request and response the analysis is parsed from. A research prototype: it attests execution, not the AI’s judgement.
           </p>
           <div className="hero-cta">
             <a className="btn btn-primary" href="#triage">
@@ -195,7 +197,7 @@ export function App() {
           </div>
           <div className="hero-proof">
             <div className="hp">
-              <span className="hp-k">Gate 1 · recorded real run, {new Date(g1.captured_at).toUTCString().slice(5, 22)} UTC</span>
+              <span className="hp-k">Gate 1 · recorded run, {new Date(g1.captured_at).toISOString().slice(0, 16).replace('T', ' ')}Z</span>
               <span className="hp-v">
                 <I.ShieldCheck size={15} /> 5 / 5 properties verified · {g1.properties.reduce((n, p) => n + p.checks.length, 0)} checks
               </span>
@@ -205,13 +207,13 @@ export function App() {
               <span className="hp-v mono">{short(g1.signer?.address, 6)}</span>
             </div>
             <div className="hp">
-              <span className="hp-k">GPU attestation</span>
+              <span className="hp-k">GPU attestation (NVIDIA-signed)</span>
               <span className="hp-v">
-                {g1.model_tee?.gpu?.count}× NVIDIA {g1.model_tee?.gpu?.arch} · NRAS signed
+                {g1.model_tee?.gpu ? `${g1.model_tee.gpu.count}× NVIDIA ${g1.model_tee.gpu.arch}` : 'not asserted'}
               </span>
             </div>
             <div className="hp">
-              <span className="hp-k">Reports stored server-side</span>
+              <span className="hp-k">Reports written to disk by the backend</span>
               <span className="hp-v">0</span>
             </div>
           </div>
@@ -279,7 +281,7 @@ export function App() {
           <strong>PrivateTriage</strong> — confidential vulnerability triage on NEAR AI Cloud. NEAR Hackathon 2026 · Privacy &amp; Private AI.
         </div>
         <div className="muted small">
-          All sample reports, products, accounts and transactions are fictional. Recorded runs are genuine NEAR AI Cloud inferences; their receipts are recomputed from archived evidence by this build. AI triage is a recommendation, not a verdict.
+          All sample reports, products, accounts and transactions are fictional. Recorded runs are genuine NEAR AI Cloud inferences; their receipts are historical appraisals recomputed from archived evidence, and their analyses are parsed from the signed response bytes, when this site was built. AI triage is a recommendation, not a verdict.
         </div>
       </footer>
     </>

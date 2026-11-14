@@ -128,7 +128,14 @@ export function validateTriage(value: unknown): ValidationResult {
       v.forEach((item, i) => {
         if (items.type === 'string' && typeof item !== 'string') errors.push(`${key}[${i}] is not a string`);
         if (items.type === 'object') {
-          if (!isObj(item) || typeof item.action !== 'string' || !['immediate', 'short_term', 'long_term'].includes(item.priority as string)) {
+          // Nested objects are as strict as the top level (additionalProperties: false).
+          const allowed = Object.keys((items.properties as Record<string, unknown>) ?? {});
+          if (
+            !isObj(item) ||
+            typeof item.action !== 'string' ||
+            !['immediate', 'short_term', 'long_term'].includes(item.priority as string) ||
+            Object.keys(item).some((k) => !allowed.includes(k))
+          ) {
             errors.push(`${key}[${i}] is malformed`);
           }
         }

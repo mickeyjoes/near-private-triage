@@ -19,7 +19,14 @@ export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 export function verdictPhrase(r: Receipt): string {
   if (r.verdict === 'VERIFIED') return 'Confidential execution verified (execution only — the analysis itself is AI-generated and may be wrong)';
   if (r.verdict === 'FAILED') return 'Verification FAILED — do not trust this output';
-  return 'Not verified — evidence incomplete';
+  if (r.transmission === 'not_sent') return 'Not verified — the report was not sent';
+  if (r.transmission === 'may_have_been_sent') return 'Not verified — the report MAY HAVE BEEN SENT, but no response was received';
+  return 'Not verified — the report was sent, but the evidence is incomplete';
+}
+
+/** Model output is untrusted: neutralise HTML and Markdown images/links so a viewer cannot be made to fetch anything. */
+export function untrusted(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/!\[/g, '!\\[').replace(/\]\(/g, ']\\(');
 }
 
 /** Evidence without the report/response bytes: still verifies (signature is over hashes). */
@@ -34,15 +41,20 @@ export function shareableEvidence(b: EvidenceBundle): EvidenceBundle {
 
 export function triageMarkdown(run: TriageRun, title: string): string {
   const r = run.receipt;
-  const t = run.outcome?.triage;
+  const raw = run.outcome?.triage;
+  // Every model-provided string is untrusted Markdown: escape it before export.
+  const t = raw ? (JSON.parse(JSON.stringify(raw), (_k, v) => (typeof v === 'string' ? untrusted(v) : v)) as typeof raw) : null;
+  const p = run.provenance;
   const L: string[] = [];
-  L.push(`# Triage: ${t?.title ?? title}`, '');
+  L.push(`# Triage: ${t?.title ?? untrusted(title)}`, '');
   L.push(`> **Execution:** ${verdictPhrase(r)}`);
-  L.push(`> Model \`${r.model}\` · captured ${r.captured_at} · chat \`${r.chat_id ?? 'n/a'}\``);
-  if (r.signer?.address) L.push(`> Signed by model enclave key \`${r.signer.address}\` (${r.signer.kind}, ${r.signer.algo})`);
-  L.push(`> request SHA-256 \`${r.request_sha256}\` · response SHA-256 \`${r.response_sha256}\``, '');
+  L.push(`> **Source:** ${p?.kind === 'recorded' ? `recorded run (historical receipt; not a fresh inference) — ${p.analysis}` : p?.kind === 'live' ? `live run — ${p.analysis}` : 'unknown'}`);
+  L.push(`> Model \`${r.model}\` · captured ${r.captured_at} · completion \`${r.chat_id ?? 'n/a'}\` · report transmission: ${r.transmission.replace(/_/g, ' ')}`);
+  if (r.signer?.address) L.push(`> Signed by the model deployment’s enclave key \`${r.signer.address}\` (${r.signer.kind}, ${r.signer.algo})`);
+  L.push(`> request SHA-256 \`${r.request_sha256}\` (the complete serialized API request: system prompt, report marker, model, parameters and report) · response SHA-256 \`${r.response_sha256}\``, '');
+  L.push('_Model-generated text below is untrusted; HTML and Markdown links/images in it are escaped._', '');
   if (!t) {
-    L.push('**No valid analysis was produced.**', '', ...(run.outcome?.errors ?? []).map((e) => `- ${e}`));
+    L.push(r.transmission === 'sent' ? '**No valid analysis was produced.**' : `**No analysis:** ${r.transmission_detail}`, '', ...(run.outcome?.errors ?? []).map((e) => `- ${untrusted(e)}`));
     return L.join('\n');
   }
   const computed = t.cvss_v31_vector ? cvss31(t.cvss_v31_vector) : null;
@@ -67,17 +79,22 @@ export function triageMarkdown(run: TriageRun, title: string): string {
     const xs = t.recommended_actions.filter((a) => a.priority === p);
     if (xs.length) L.push(`**${p.replace('_', ' ')}**`, ...xs.map((a) => `- ${a.action}`), '');
   }
+  for (const n of run.analyst_notes ?? []) {
+    L.push(`## Analyst correction (human commentary — not part of the signed model output)`, '');
+    L.push(`Corrects: “${n.quote}”`, '', `**${n.title}**`, '', ...n.body.flatMap((x) => [x, '']));
+    L.push(`— ${n.author}, ${n.date}. References: ${n.references.map((x) => `${x.label} <${x.url}>`).join('; ')}. The signed response is unchanged; this note is bound to its SHA-256.`, '');
+  }
   list('Missing information', t.missing_information);
   list('Questions for the reporter', t.questions_for_reporter);
   if (t.injection_detected || run.hygiene.some((h) => h.kind === 'injection')) {
-    L.push('## ⚠ Prompt-injection attempt', '', t.injection_notes || 'Flagged by the local hygiene scan.', '');
+    L.push('## ⚠ Instructions aimed at the AI detected — check the analysis for their influence', '', t.injection_notes || 'Flagged by the local hygiene scan.', '');
     for (const h of run.hygiene.filter((x) => x.kind === 'injection')) L.push(`- local scan: ${h.label}`);
     L.push('');
   }
   const warns = run.outcome?.consistency.filter((c) => c.status === 'warn') ?? [];
   list('Deterministic consistency warnings', warns.map((w) => w.detail));
   L.push('---', '');
-  L.push('**What the verification proves:** the request ran on NEAR AI Cloud inside an attested Intel TDX gateway and a GPU-backed (NVIDIA confidential computing) model enclave, answered a fresh challenge derived from this report, and the model enclave signed the exact request/response hashes above.', '');
+  L.push('**What the verification proves (if VERIFIED):** before the report was sent, NEAR AI Cloud’s gateway and every model enclave it returned produced Intel TDX evidence for NEAR’s pinned software, and NVIDIA GPU evidence and per-GPU appraisals for confidential-computing mode, all answering a challenge derived from the exact request; afterwards, a key held by the attested model deployment signed the request/response hashes above, and this analysis is parsed from those response bytes.', '');
   L.push('**What it does not prove:**', ...r.not_proven.map((x) => `- ${x}`), '');
   L.push(`_Generated by PrivateTriage (${r.verifier}). Re-verify offline: \`npm run verify -- evidence.json\`._`);
   return L.join('\n');

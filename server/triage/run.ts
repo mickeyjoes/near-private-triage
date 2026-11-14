@@ -1,7 +1,9 @@
 // One confidential triage: hygiene scan → attest → (gated) disclose → verify → interpret.
+import type { AnalystNote } from '../../shared/annotations.ts';
 import { type HygieneFinding, scanReport } from '../../shared/hygiene.ts';
 import { runConfidentialCompletion, type Stage } from '../near/confidentialCompletion.ts';
 import { evaluateBundle, type EvidenceBundle, type Receipt } from '../verifier/evidence.ts';
+import type { Provenance } from './replay.ts';
 import { buildTriageRequest, DEFAULT_MODEL, interpretResponse, type TriageOutcome } from './triage.ts';
 
 export interface StageEvent {
@@ -17,6 +19,8 @@ export interface TriageRun {
   stages: StageEvent[];
   receipt: Receipt;
   outcome: TriageOutcome | null;
+  analyst_notes: AnalystNote[];
+  provenance: Provenance;
   /** Full evidence INCLUDING the exact request/response bytes (contains the report). Never persisted server-side. */
   evidence: EvidenceBundle;
   duration_ms: number;
@@ -60,6 +64,16 @@ export async function runTriage(opts: {
     stages,
     receipt,
     outcome,
+    analyst_notes: [],
+    provenance: {
+      kind: 'live',
+      captured_at: result.bundle.captured_at,
+      request_sha256: c?.request_sha256 ?? null,
+      response_sha256: c?.response_sha256 ?? null,
+      analysis: c ? 'Parsed from the response bytes received in this run (the bytes whose hash the receipt checks).' : 'No response was received.',
+      request: 'Built by this backend from the title and body you submitted, plus the system prompt, a random report marker, the model and parameters.',
+      timings: 'Measured by this backend.',
+    },
     evidence: result.bundle,
     duration_ms: Date.now() - t0,
   };

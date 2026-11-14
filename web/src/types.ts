@@ -1,3 +1,4 @@
+import type { AnalystNote } from '../../shared/annotations.ts';
 import type { HygieneFinding } from '../../shared/hygiene.ts';
 import type { SampleReport } from '../../shared/samples.ts';
 import type { Triage, TriageCheck } from '../../shared/triage.ts';
@@ -40,6 +41,8 @@ export interface Receipt {
   request_sha256: string | null;
   response_sha256: string | null;
   chat_id: string | null;
+  transmission: 'not_sent' | 'may_have_been_sent' | 'sent';
+  transmission_detail: string;
   disclosed: boolean;
   signer: { kind: string | null; algo: string | null; address: string | null } | null;
   properties: Property[];
@@ -61,7 +64,7 @@ export interface Receipt {
     candidates_returned?: number;
     candidates_verified?: number;
     quote?: QuoteSummary | null;
-    gpu?: { count: number; arch: string | null; nras_iat: number | null; nras_jti: string | null; nras_eat_nonce: string | null };
+    gpu?: { count: number; arch: string; source: string; driver_versions: string[]; nras_iat: number | null; nras_jti: string | null; nras_eat_nonce: string | null } | null;
   } | null;
   not_proven: string[];
   trust_assumptions: string[];
@@ -98,6 +101,16 @@ export interface TriageRun {
   stages: StageEvent[];
   receipt: Receipt;
   outcome: TriageOutcome | null;
+  analyst_notes?: AnalystNote[];
+  provenance?: {
+    kind: 'recorded' | 'live';
+    captured_at: string;
+    request_sha256: string | null;
+    response_sha256: string | null;
+    analysis: string;
+    request: string;
+    timings: string;
+  };
   evidence?: EvidenceBundle;
   evidence_file?: string;
   duration_ms: number;
@@ -122,7 +135,7 @@ export interface DemoData {
   runs: Record<string, TriageRun>;
   gate1: { receipt: Receipt; evidence_file: string };
   refusals: { model: string; captured_at: string; blocked_reason: string | null; receipt: Receipt }[];
-  outages: { id: string; model: string; captured_at: string; blocked_reason: string | null; disclosed: boolean; verdict: Verdict }[];
+  outages: { id: string; model: string; captured_at: string; blocked_reason: string | null; transmission: Receipt['transmission']; disclosed: boolean; verdict: Verdict }[];
   tamper: { base: string; results: TamperResult[] };
 }
 
@@ -135,4 +148,4 @@ export interface BackendStatus {
   busy: boolean;
 }
 
-export type { HygieneFinding, SampleReport, Triage, TriageCheck };
+export type { AnalystNote, HygieneFinding, SampleReport, Triage, TriageCheck };

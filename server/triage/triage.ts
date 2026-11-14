@@ -52,6 +52,12 @@ export interface TriageRequest {
 
 export function buildTriageRequest(title: string, body: string, model: string = DEFAULT_MODEL): TriageRequest {
   const marker = randomBytes(6).toString('hex');
+  return { bytes: triageRequestBytes(marker, title, body, model), marker, model };
+}
+
+/** The exact serialized API request for a report and marker. Deterministic, so a
+ * recorded request can be matched byte-for-byte to the report it claims to carry. */
+export function triageRequestBytes(marker: string, title: string, body: string, model: string): Buffer {
   const payload = {
     model,
     messages: [
@@ -62,7 +68,7 @@ export function buildTriageRequest(title: string, body: string, model: string = 
     max_tokens: 8000,
     stream: false,
   };
-  return { bytes: Buffer.from(JSON.stringify(payload), 'utf8'), marker, model };
+  return Buffer.from(JSON.stringify(payload), 'utf8');
 }
 
 export interface TriageOutcome {
