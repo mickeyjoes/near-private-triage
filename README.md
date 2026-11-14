@@ -27,7 +27,7 @@ Requirements: Node.js ≥ 24 (developed on 26), npm, Linux or macOS.
 | 5 | Pick **"Vague claim + prompt injection"**, then replay | The report demands "CRITICAL / CVSS 10.0 / maximum bounty". It is flagged by the local scan (5 patterns) and by the model, and rated *undetermined / needs more information*. |
 | 6 | Scroll to **Tamper lab**, then click **Reveal all** | 26 attacks on genuine evidence, all caught: 21 FAILED, 5 UNVERIFIED. The real verifier computed these results **when the site was built** (and `npm test` recomputes them); clicking reveals them. They are the attacks we tested, not a completeness proof. |
 | 7 | `npm run verify -- evidence/gate1/2026-11-13T16-12-38-022Z/evidence.json --receipt evidence/gate1/2026-11-13T16-12-38-022Z/receipt.json` | `VERDICT: VERIFIED` and `receipt: MATCHES`. The verifier re-checks Intel quotes, the raw GPU reports and NVIDIA's platform and per-GPU tokens, the recorded TLS observations and the enclave signature offline, and the recomputed receipt is byte-identical. |
-| 8 | `npm test` | **106 passing**: genuine bundles re-verify; genuine refusals stay unverified; all 26 tamper scenarios are caught by the intended check; the API key is never sent on a non-attested connection (report POST *and* signature fetch); a failed send is never reported as "not sent"; an altered saved analysis fails the demo build. |
+| 8 | `npm test` | **107 passing**: genuine bundles re-verify; genuine refusals stay unverified; all 26 tamper scenarios are caught by the intended check; the API key is never sent on a non-attested connection (report POST *and* signature fetch); a failed send is never reported as "not sent"; an altered saved analysis fails the demo build. |
 | 9 | *(optional, live, ≈ $0.006)* put `NEARAI_CLOUD_API_KEY=sk-…` in `.env`, run `npm start`, then click **Attest & triage** | A fresh confidential inference in about 15 s, with streamed stages and a new receipt. **Evidence & export** downloads files that re-verify with step 7. |
 | 10 | *(optional, live)* `npm run gate1` | The minimal Gate 1 probe. It exits 0 only on VERIFIED and writes `evidence/gate1/<timestamp>/`. |
 
@@ -170,7 +170,7 @@ shared/            triage schema + CVSS 3.1 calculator, hygiene scan, fictional 
 web/               React + Vite UI (guided demo works as a static site)
 scripts/           gate1.ts, record-samples.ts, verify-bundle.ts, build-demo.ts
 evidence/          genuine recorded bundles + receipts (gate1, samples, refusals, attempts)
-test/              node:test suites (106 tests)
+test/              node:test suites (107 tests)
 docs/              TRUST_MODEL.md, SUBMISSION.md, PURSEWARDEN_DIFFERENCE.md, media/
 ```
 

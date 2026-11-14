@@ -85,6 +85,27 @@ describe('attested-connection pinning', () => {
     assert.deepEqual(seen.map((s) => [s.method, s.conn]), [['GET', 1], ['POST', 1]]);
   });
 
+  it('the live sequence (attestation GET → pinned report POST → pinned signature GET) stays on one socket', async (t) => {
+    if (!haveOpenssl) return t.skip('openssl not available');
+    const { srv, seen } = server(5_000);
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const conn = new PinnedConnection(`https://localhost:${(srv.address() as AddressInfo).port}`, { ca: cert });
+    try {
+      const a = await conn.request({ method: 'GET', path: '/v1/attestation/report' });
+      const pin = { id: a.socketId, spkiSha256: a.peerSpkiSha256! };
+      const tx: TransmissionTracker = { state: 'may_have_been_sent' };
+      const post = await conn.request({ method: 'POST', path: '/v1/chat/completions', headers: { Authorization: 'Bearer TEST-ONLY' }, body: Buffer.from('FICTIONAL'), requireSocket: pin, transmission: tx });
+      const sig = await conn.request({ method: 'GET', path: '/v1/signature/x', headers: { Authorization: 'Bearer TEST-ONLY' }, requireSocket: pin });
+      assert.equal(tx.state, 'sent');
+      assert.equal(post.socketId, a.socketId);
+      assert.equal(sig.socketId, a.socketId);
+      assert.deepEqual(seen.map((s) => [s.method, s.conn, s.auth]), [['GET', 1, false], ['POST', 1, true], ['GET', 1, true]]);
+    } finally {
+      conn.close();
+      srv.close();
+    }
+  });
+
   it('refuses to send anything if the attested socket was closed meanwhile', async (t) => {
     if (!haveOpenssl) return t.skip('openssl not available');
     const { result, seen } = await exchange(150, 500); // server drops the idle connection during "appraisal"
