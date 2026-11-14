@@ -1,8 +1,11 @@
-# Read-only guided demo on GitHub Pages. MANUAL TRIGGER ONLY: nothing deploys
-# until the repository owner enables Pages (source: GitHub Actions) and runs it.
-# The static site contains recorded genuine evidence and never an API key.
-name: pages (manual)
+# Read-only guided demo on GitHub Pages (source: GitHub Actions). Deploys ONLY the
+# static web/dist build: recorded genuine evidence, no backend, no API key, no live
+# inference (with no /api the app stays in guided-demo mode). Runs on every push to
+# main, after the full typecheck and test suite, and on manual dispatch.
+name: pages
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
