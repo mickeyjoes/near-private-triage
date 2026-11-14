@@ -1,10 +1,10 @@
 # PROJECT_HANDOFF: PrivateTriage
 
-_Last updated: 2026-11-14 (UTC). Repository: https://github.com/mickeyjoes/near-private-triage (**private** until the owner makes it public). `main` = `cff3b6c` (audited baseline). Audit fixes are on branch **`fix/final-audit`**, pushed for CI and **not merged**. Local checkout: `~/Dev/Hackathons/NEAR/near-private-triage`._
+_Last updated: 2026-11-14 (UTC). Repository: https://github.com/mickeyjoes/near-private-triage — **public** since 2026-11-14 (owner-approved release). `main` contains the audit and delta-review fixes (fast-forward of `fix/final-audit`, no force) and carries the `hackathon-submission` tag. Hosted read-only guided demo: https://mickeyjoes.github.io/near-private-triage/. Local checkout: `~/Dev/Hackathons/NEAR/near-private-triage`._
 
 ## VERDICT
 
-**Gate 1 PASSED, and the final independent audit's findings are fixed on `fix/final-audit`.** A real NEAR AI Cloud confidential inference was verified across five properties; under the corrected verifier each VERIFIED receipt has **47 checks**, all passing:
+**Gate 1 PASSED, and the final independent audit's findings are fixed and released on `main`.** A real NEAR AI Cloud confidential inference was verified across five properties; under the corrected verifier each VERIFIED receipt has **47 checks**, all passing:
 
 - **Gateway TEE:** Intel TDX, TCB UpToDate, no debug, nonce-bound, NEAR's pinned OS image and app.
 - **TLS binding:** the quote-bound SPKI equals the peer SPKI; the inference used the same socket and certificate key; the endpoint is NEAR AI Cloud.
@@ -107,15 +107,15 @@ shared/          web/         scripts/       test/  evidence/  docs/
 - **Tests:** 113 `node:test` tests (verifier, transport, pipeline, replay/annotation/attribution, triage).
 - **Typecheck:** `tsc` for the server and the web app.
 - **Dependencies:** pinned exactly, with install scripts disabled.
-- **CI:** `.github/workflows/ci.yml` runs typecheck, tests, the build and offline re-verification of the evidence; green on `fix/final-audit`.
-- **Pages:** `pages.yml` is manual-trigger only. GitHub Pages does not apply the backend's CSP headers.
+- **CI:** `.github/workflows/ci.yml` runs typecheck, tests, the build and offline re-verification of the evidence; green on `main`.
+- **Pages:** https://mickeyjoes.github.io/near-private-triage/ — `pages.yml` deploys the static `web/dist` (built with `VITE_STATIC_DEMO=1`, so the app never contacts an API) on every push to `main` and on manual dispatch. GitHub Pages does not apply the backend's CSP headers.
 
 ## REPRODUCTION
 
-Clean clone of `fix/final-audit`, verified on 2026-11-14:
+Clean clone of `main`, verified on 2026-11-14:
 
 ```bash
-git clone -b fix/final-audit https://github.com/mickeyjoes/near-private-triage.git && cd near-private-triage && npm ci
+git clone https://github.com/mickeyjoes/near-private-triage.git && cd near-private-triage && npm ci
 npm run typecheck && npm test                           # 113 pass
 npm run build && PRIVATETRIAGE_DEMO_ONLY=1 npm start    # http://127.0.0.1:8787
 npm run verify -- evidence/gate1/2026-11-13T16-12-38-022Z/evidence.json --receipt evidence/gate1/2026-11-13T16-12-38-022Z/receipt.json
@@ -136,17 +136,15 @@ Everything is in `docs/SUBMISSION.md`:
 
 Rules come from the live `HACKATHON.md`, checked on 2026-11-13:
 - One person may submit at most 2 independent projects.
-- **Each README must name the other (Q-015).** The reciprocal line for Pursewarden is ready in `docs/PURSEWARDEN_DIFFERENCE.md`. This project did not modify Pursewarden.
+- **Each README must name the other (Q-015).** Done: Pursewarden's README names PrivateTriage (mickeyjoes/pursewarden `04ca857`, owner-approved, documentation only; its `hackathon-submission` tag is unchanged).
 - Each repository can be submitted once.
 - The repository must be public by 2026-11-14T23:59Z.
 - The X post needs the video or screenshots attached.
 
 ## NEXT ACTION
 
-Owner: review `fix/final-audit` (CI green) and merge it into `main`. Then:
-1. Watch and listen to the corrected video.
-2. Make the repository public. This is required by 2026-11-14T23:59Z.
-3. Add the reciprocal note to Pursewarden's README (rule Q-015).
-4. Post on X with the video.
-5. Submit with the payload template.
+Released 2026-11-14: `main` fast-forwarded, repository public, Pages deployed, Pursewarden reciprocal line added, `hackathon-submission` tag created. Owner only:
+1. Watch and listen to the corrected video (1:54.97).
+2. Post on X with the video (draft in `docs/SUBMISSION.md` §2).
+3. Submit with the payload template (`docs/SUBMISSION.md` §5), before 2026-11-14T23:59Z.
 

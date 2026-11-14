@@ -2,6 +2,8 @@
 
 PrivateTriage triages **unpublished vulnerability reports** with an AI model on **NEAR AI Cloud**. It sends the report only after **Intel TDX and NVIDIA confidential-computing evidence** for the gateway and model enclaves verifies, bound to a challenge derived from the exact request. It then checks that the **model enclave's key signed the exact request and response bytes**; the analysis you read is parsed from those signed bytes. Every claim is recorded in a receipt and the tested checks fail closed. Anyone can re-verify a receipt offline, with no API key. It attests *how and where* the model ran — not that the AI's judgement is right.
 
+**[▶ Hosted guided demo](https://mickeyjoes.github.io/near-private-triage/)** — read-only static site with the recorded genuine runs (historical receipts). It never contacts an API: no API key, no inference, no report leaves your browser.
+
 > **Status:** research prototype built for NEAR HACKATHON 2026. Primary track: **`privacy`** (Privacy & Private AI). It is not a production security product: don't use it for real embargoed reports without your own review. All sample reports are **fictional**. Every recorded run in this repository is a **genuine** NEAR AI Cloud inference. A final independent audit (2026-11-14) found four medium-severity defects and one incorrect recorded recommendation; all are fixed or annotated — see [Corrections after the final audit](#corrections-after-the-final-independent-audit-2026-11-14).
 
 > **Two independent projects, one author (rule Q-015).** This author's other submission is **[Pursewarden](https://github.com/mickeyjoes/pursewarden)** ([pursewarden.com](https://pursewarden.com)), which builds fixed-budget NEAR vaults for AI agents (tracks `security`, `agents`). The two projects share no code, contracts, keys, evidence or infrastructure. See [docs/PURSEWARDEN_DIFFERENCE.md](docs/PURSEWARDEN_DIFFERENCE.md).
@@ -15,6 +17,8 @@ An unpublished vulnerability report is the most sensitive document a security te
 NEAR AI Cloud runs some models inside hardware TEEs and publishes attestation evidence. Evidence only matters if someone actually checks it before disclosure and binds it to the specific request. PrivateTriage does that check, fail-closed, and shows the result to a human in plain language.
 
 ## Start here (judges): do X, see Y
+
+No install: steps 3–6 also work on the **[hosted guided demo](https://mickeyjoes.github.io/near-private-triage/)**. To run it yourself and re-verify offline:
 
 Requirements: Node.js ≥ 24 (developed on 26), npm, Linux or macOS.
 

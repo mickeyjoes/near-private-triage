@@ -9,7 +9,7 @@ Live rules checked on 2026-11-13: https://nearhackathon.com/HACKATHON.md.
 - The X post must say it was built at NEAR HACKATHON, tag **@NEARProtocol** and **#NEARHackathon**, and attach a video or screenshots.
 - A local-only demo is acceptable with a video (Q-012). A hosted demo is a plus; keep it up until at least 2026-11-18.
 
-## 1. "What they built" (20–2000 characters; this text is 1,866)
+## 1. "What they built" (20–2000 characters; this text is 1,946)
 
 ```
 PrivateTriage: attest before you disclose.
@@ -21,6 +21,8 @@ Product (research prototype): PrivateTriage sends a report to an AI model on NEA
 Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify offline byte-for-byte with no API key. 26 tested attacks on genuine evidence (edited verdict, replayed attestation, forged signer, TLS interception, forged NVIDIA tokens, invented GPUs...) are all caught. External-provider models are refused before disclosure. 113 tests. Findings from an independent audit were fixed before release.
 
 NEAR: NEAR AI Cloud private inference, TEE attestation and response-signature APIs (Privacy & Private AI track). Independent second project by the author of Pursewarden.
+
+Guided demo (recorded runs): https://mickeyjoes.github.io/near-private-triage/
 ```
 
 ## 2. X post draft (270 of 280 characters as X counts them, since links count as 23; attach the video)
@@ -38,9 +40,9 @@ Optional tags per the rules: @NearLegion and @NearBuilders.
 - **First cut** (1:50, recorded at `c747d69`) is archived as `final/archive/privatetriage-demo-c747d69.*`. After the 2026-11-14 audit it is **no longer accurate**: it says "42 checks" and "21 attacks … each re-verified" (the Tamper lab reveals build-time results), shows the old "detected — and ignored" card, says the hardware "proves where the model runs", and its terminal scene mixes up two commits.
 - **Corrected cut — produced 2026-11-14** (bounded correction, no new inference): 1:54.97, 1920×1080, H.264/AAC, `.en.srt` subtitles. The live NEAR AI Cloud segment (s01–s03) is kept as recorded, with corrected narration and lower thirds disclosing "RECORDED AT c747d69 (UI WORDING SINCE CORRECTED)" — that footage still shows the old banner wording and "42 checks" in the hero, which is not spoken. The guided-demo scenes (injection, Verification, Tamper lab, Fail closed) and the clean-clone terminal (`9a74df7`: 47 ✓, VERDICT: VERIFIED, receipt: MATCHES) are re-captured from the fixed build; the narration says 47 checks and 26 tested attacks (21 fail, 5 unverified) "computed when the site was built"; the end card says "Research prototype · not production-ready". Validation: codec, loudness (−16.1 LUFS), OCR privacy scan, on-screen facts, `dvk facts` and A/V sync all pass. Narration is AI voice (disclosed); **the owner should listen once** before posting. Script: `narration/SCRIPT.md` in the video project.
 
-## 4. Hosted read-only demo (optional, owner decision)
+## 4. Hosted read-only demo
 
-The guided demo is a static site. `npm run build` produces `web/dist` with recorded evidence and no backend. With no `/api`, the app falls back to demo mode, so it can be hosted anywhere static, such as GitHub Pages. `.github/workflows/pages.yml` is prepared with **manual trigger only** (`workflow_dispatch`). Nothing is deployed until the owner enables Pages for the repo and runs it. Never deploy the live backend publicly with a key: it is designed for localhost. The strict CSP and other security headers come from `server/app.ts`; GitHub Pages does not apply them, so do not claim the static host inherits them, keep unrelated sensitive apps off the same origin, and inspect the built `web/dist` before deploying.
+**https://mickeyjoes.github.io/near-private-triage/** — deployed by `.github/workflows/pages.yml` (Pages source: GitHub Actions) on every push to `main`, after typecheck, tests and build, and on manual dispatch. Only the static `web/dist` guided demo is deployed, built with `VITE_STATIC_DEMO=1`: recorded genuine evidence, no backend, no API key, and the app never contacts an API (no live inference exists there). Never deploy the live backend publicly with a key: it is designed for localhost. The strict CSP and other security headers come from `server/app.ts`; GitHub Pages does not apply them, so do not claim the static host inherits them. Keep the site up until at least 2026-11-18.
 
 ## 5. Submission payload (owner fills the placeholders; never guessed)
 
@@ -71,16 +73,17 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 | Gate 1: real inference, fresh nonce, attestation, signature bound to the request, response and model; machine-readable VERIFIED | ✅ `evidence/gate1/2026-11-13T16-12-38-022Z` |
 | Product: 3 fictional samples (one uncertain plus injection), structured triage, exports | ✅ |
 | Negative tests: tampering, signer mismatch, invalid quote, stale challenge, unavailable evidence, corrupted response, non-TEE model, malformed output, prompt injection, forged/invented GPU evidence, credential on a replacement connection, failed-send state, altered demo analysis, unauthenticated response labelled as signed | ✅ 113/113 |
-| Final independent audit (2026-11-14): F1–F4 fixed with regression tests, F5 annotated, wording corrected; delta review D1 (signed-output wording) fixed; corrected transport smoke-tested live (VERIFIED) | ✅ branch `fix/final-audit` (CI green); ⏳ owner merges into `main` |
+| Final independent audit (2026-11-14): F1–F4 fixed with regression tests, F5 annotated, wording corrected; delta review D1 (signed-output wording) fixed; corrected transport smoke-tested live (VERIFIED) | ✅ fast-forwarded into `main` 2026-11-14 (CI green) |
 | Offline receipt reproduction (byte-identical) | ✅ `npm run verify` |
 | UI checked at desktop (1440) and mobile (390); no horizontal overflow; no console errors | ✅ |
 | Clean-checkout build (`git clone` → `npm ci` → typecheck → test → build) | ✅ (see PROJECT_HANDOFF) |
 | Secret scan: tree, full git history, built bundle, evidence | ✅ no key material |
 | README names Pursewarden (Q-015) | ✅ |
-| **Pursewarden README names PrivateTriage (Q-015)** | ⏳ owner: add the line in docs/PURSEWARDEN_DIFFERENCE.md |
+| Pursewarden README names PrivateTriage (Q-015) | ✅ mickeyjoes/pursewarden `04ca857` (docs only; its `hackathon-submission` tag unchanged) |
 | Create the GitHub repository and push | ✅ https://github.com/mickeyjoes/near-private-triage (pushed 2026-11-14) |
-| **Make the repository public** (required by 2026-11-14T23:59Z) | ⏳ owner |
+| Make the repository public (required by 2026-11-14T23:59Z) | ✅ public 2026-11-14 |
 | Demo video | ✅ corrected cut produced and validated (see §3); ⏳ owner listens and approves |
 | Publish the X post | ⏳ owner |
-| Optional: enable Pages and run the manual Pages workflow | ⏳ owner |
+| Hosted read-only guided demo (GitHub Pages) | ✅ https://mickeyjoes.github.io/near-private-triage/ |
+| `hackathon-submission` tag on the final validated commit | ✅ |
 | Submit (one attempt per repo) | ⏳ owner confirms the exact payload |
