@@ -23,10 +23,10 @@ Evidence: genuine recorded runs (Gate 1 plus three fictional reports) re-verify 
 NEAR: NEAR AI Cloud private inference, TEE attestation and response-signature APIs (Privacy & Private AI track). Independent second project by the author of Pursewarden.
 ```
 
-## 2. X post draft (249 characters, plus about 24 for the repo link; attach the video)
+## 2. X post draft (273 of 280 characters as X counts them, since links count as 23; attach the video)
 
 ```
-Built at NEAR HACKATHON: PrivateTriage, AI triage for unpublished vuln reports. It sends nothing until @NEARProtocol AI Cloud proves where the model runs (Intel TDX + NVIDIA GPU attestation), then checks the enclave signed the answer. #NEARHackathon <repo link>
+Built at NEAR HACKATHON: PrivateTriage, AI triage for unpublished vuln reports. It sends nothing until @NEARProtocol AI Cloud proves where the model runs (Intel TDX + NVIDIA GPU attestation), then checks the enclave signed the answer. #NEARHackathon https://github.com/mickeyjoes/near-private-triage
 ```
 
 Optional tags per the rules: @NearLegion and @NearBuilders.
@@ -68,7 +68,7 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
   "size": "1",
   "tracks": ["privacy"],
   "nearAddress": "<owner mainnet account>",
-  "projectUrl": "<public repo URL>",
+  "projectUrl": "https://github.com/mickeyjoes/near-private-triage",
   "demoUrl": "<X post URL>",
   "idea": "<section 1 text>",
   "consent": true
@@ -92,7 +92,8 @@ The guided demo is a static site. `npm run build` produces `web/dist` with recor
 | Secret scan: tree, full git history, built bundle, evidence | ✅ no key material |
 | README names Pursewarden (Q-015) | ✅ |
 | **Pursewarden README names PrivateTriage (Q-015)** | ⏳ owner: add the line in docs/PURSEWARDEN_DIFFERENCE.md |
-| Create a public GitHub repository and push | ⏳ owner approval |
+| Create the GitHub repository and push | ✅ https://github.com/mickeyjoes/near-private-triage (pushed 2026-11-14) |
+| **Make the repository public** (required by 2026-11-14T23:59Z) | ⏳ owner |
 | Record the demo video | ✅ produced (1:50, validated); ⏳ owner listens and approves |
 | Publish the X post | ⏳ owner |
 | Optional: enable Pages and run the manual Pages workflow | ⏳ owner |

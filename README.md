@@ -165,7 +165,7 @@ docs/              TRUST_MODEL.md, SUBMISSION.md, PURSEWARDEN_DIFFERENCE.md, med
 ## Reproduce from a clean checkout
 
 ```bash
-git clone <this repo> && cd near-private-triage
+git clone https://github.com/mickeyjoes/near-private-triage.git && cd near-private-triage
 npm ci                      # exact pinned versions, install scripts disabled
 npm run typecheck && npm test
 npm run build && PRIVATETRIAGE_DEMO_ONLY=1 npm start   # http://127.0.0.1:8787

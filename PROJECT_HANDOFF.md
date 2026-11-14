@@ -1,6 +1,6 @@
 # PROJECT_HANDOFF: PrivateTriage
 
-_Last updated: 2026-11-13 (UTC). Repository: local `~/Dev/Hackathons/NEAR/near-private-triage`, branch `main`. **Not pushed, not public.**_
+_Last updated: 2026-11-14 (UTC). Repository: https://github.com/mickeyjoes/near-private-triage (branch `main`, pushed 2026-11-14; **still private** until the owner makes it public). Local checkout: `~/Dev/Hackathons/NEAR/near-private-triage`._
 
 ## VERDICT
 
@@ -141,7 +141,7 @@ shared/          web/         scripts/       test/  evidence/  docs/
 Clean clone, verified on 2026-11-13:
 
 ```bash
-git clone <repo> && cd near-private-triage && npm ci
+git clone https://github.com/mickeyjoes/near-private-triage.git && cd near-private-triage && npm ci
 npm run typecheck && npm test                           # 66 pass
 npm run build && PRIVATETRIAGE_DEMO_ONLY=1 npm start    # http://127.0.0.1:8787
 npm run verify -- evidence/gate1/2026-11-13T16-12-38-022Z/evidence.json --receipt evidence/gate1/2026-11-13T16-12-38-022Z/receipt.json
@@ -169,7 +169,9 @@ Rules come from the live `HACKATHON.md`, checked on 2026-11-13:
 
 ## NEXT ACTION
 
-Owner: watch and listen to the demo video, then create the public GitHub repository (suggested name `mickeyjoes/near-private-triage`) and approve the push. Then:
+Done: the repository was created by the owner and `main` was pushed to https://github.com/mickeyjoes/near-private-triage (currently **private**).
+
+Owner: watch and listen to the demo video, then make the repository public (required by 2026-11-14T23:59Z). Then:
 1. Add the one-line reciprocal note to Pursewarden's README (rule Q-015).
 2. Optionally add the repo URL to the video's end card.
 3. Post on X with the video (draft in `docs/SUBMISSION.md`).
