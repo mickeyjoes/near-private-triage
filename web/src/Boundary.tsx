@@ -58,7 +58,7 @@ export function Refusals({ data, live }: { data: DemoData; live: boolean }) {
         <div className="card preflight">
           <div className="preflight-row">
             <label className="field inline">
-              <span className="field-label">Check any model (free · attestation only · nothing is sent)</span>
+              <span className="field-label">Check any model (free · attestation request only · no report is sent)</span>
               <input value={model} onChange={(e) => setModel(e.target.value)} spellCheck={false} />
             </label>
             <button type="button" className="btn btn-ghost" onClick={check} disabled={busy}>
