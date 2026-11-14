@@ -145,3 +145,73 @@ describe('tamper scenarios on genuine evidence', () => {
     }
   });
 });
+
+describe('GPU evidence is authenticated before any GPU fact is shown (audit F3)', () => {
+  const editGpu = (edit: (p: Record<string, unknown>) => void, nras?: (arr: unknown[]) => void) => {
+    const t = structuredClone(base);
+    const a = JSON.parse(t.attestation!.body);
+    const p = JSON.parse(a.model_attestations[0].nvidia_payload);
+    edit(p);
+    a.model_attestations[0].nvidia_payload = JSON.stringify(p);
+    t.attestation!.body = JSON.stringify(a);
+    if (nras) {
+      const arr = JSON.parse(t.nras['0']!.nrasResponse);
+      nras(arr);
+      t.nras['0'] = { ...t.nras['0']!, nrasResponse: JSON.stringify(arr) };
+    }
+    return t;
+  };
+  const original = JSON.stringify(evaluateBundle(base).receipt);
+
+  it('genuine evidence: GPU facts come from NVIDIA-signed per-GPU claims', () => {
+    const { receipt } = evaluateBundle(base);
+    const gpu = receipt.model_tee?.gpu as { count: number; arch: string } | null;
+    assert.equal(gpu?.count, 8);
+    assert.equal(gpu?.arch, 'GH100');
+    for (const id of ['gpu_device_reports', 'gpu_claims', 'gpu_inventory']) assert.equal(check(receipt, 'gpu_tee', id).c?.status, 'pass', id);
+  });
+
+  for (const [name, mutate] of [
+    ['raw GPU reports replaced with null', () => editGpu((p) => { p.evidence_list = (p.evidence_list as unknown[]).map(() => null); })],
+    ['one detached per-GPU token forged', () => editGpu(() => {}, (arr) => { (arr[1] as Record<string, string>)['GPU-0'] = 'this.is.forged'; })],
+    ['99 invented GPUs, invented arch, detached tokens deleted', () => editGpu((p) => { p.arch = 'ATTACKER-INVENTED-GPU'; p.evidence_list = Array(99).fill({ evidence: '00', certificate: 'not-a-cert', nonce: '00' }); }, (arr) => { arr[1] = {}; })],
+    ['8 invented GPU entries (count within limits)', () => editGpu((p) => { p.evidence_list = Array(8).fill({ evidence: '00', certificate: 'not-a-cert', nonce: p.nonce }); })],
+    ['detached per-GPU tokens deleted', () => editGpu(() => {}, (arr) => { arr[1] = {}; })],
+  ] as const) {
+    it(`${name}: not VERIFIED, disclosure blocked, no GPU inventory asserted, receipt changes`, () => {
+      const { receipt, preflight } = evaluateBundle(mutate());
+      assert.notEqual(receipt.verdict, 'VERIFIED');
+      assert.equal(preflight.ok, false);
+      assert.equal(receipt.model_tee?.gpu ?? null, null);
+      assert.notEqual(JSON.stringify(receipt), original);
+    });
+  }
+});
+
+describe('report transmission state (audit F2)', () => {
+  it('refusals and preflight blocks are "not sent"', () => {
+    for (const d of [...dirs('evidence/refusals'), ...dirs('evidence/attempts').filter((x) => x.includes('blocked'))]) {
+      const { receipt } = evaluateBundle(load(join(d, 'evidence.json')));
+      assert.equal(receipt.transmission, 'not_sent', d);
+      assert.equal(receipt.disclosed, false);
+    }
+  });
+
+  it('a recorded response is always "sent", whatever the bundle claims', () => {
+    const t = structuredClone(base);
+    t.transmission = { state: 'not_sent', detail: 'lie' };
+    assert.equal(evaluateBundle(t).receipt.transmission, 'sent');
+  });
+
+  it('an older bundle with a passing preflight but no response is conservatively "may have been sent"', () => {
+    const t = structuredClone(base);
+    t.completion = null;
+    t.signature = null;
+    t.blocked_reason = 'Inference request failed: socket hang up';
+    const { receipt } = evaluateBundle(t);
+    assert.equal(receipt.transmission, 'may_have_been_sent');
+    assert.equal(receipt.disclosed, true);
+    assert.notEqual(receipt.verdict, 'VERIFIED');
+  });
+});
+

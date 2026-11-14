@@ -55,6 +55,26 @@ function editResponse(b: EvidenceBundle, edit: (text: string) => string, rehash:
   if (rehash) c.response_sha256 = sha256Hex(bytes);
 }
 
+function editGpuPayload(b: EvidenceBundle, edit: (p: Record<string, unknown>) => void): EvidenceBundle {
+  const t = clone(b);
+  const a = att(t);
+  const m = (a.model_attestations as Record<string, unknown>[])[0]!;
+  const p = JSON.parse(m.nvidia_payload as string) as Record<string, unknown>;
+  edit(p);
+  m.nvidia_payload = JSON.stringify(p);
+  setAtt(t, a);
+  return t;
+}
+
+function editNras(b: EvidenceBundle, edit: (arr: unknown[]) => void): EvidenceBundle {
+  const t = clone(b);
+  const n = t.nras['0']!;
+  const arr = JSON.parse(n.nrasResponse) as unknown[];
+  edit(arr);
+  t.nras['0'] = { ...n, nrasResponse: JSON.stringify(arr) };
+  return t;
+}
+
 /** Change the model's verdict inside the signed response: the attack a judge cares about. */
 function downgradeSeverity(text: string): string {
   for (const [from, to] of [
@@ -302,6 +322,73 @@ export const SCENARIOS: TamperScenario[] = [
       const genuine = jwks.keys.find((k) => k.kid === header.kid)!;
       const forged = { ...(publicKey.export({ format: 'jwk' }) as Record<string, unknown>), kid: header.kid, x5c: genuine.x5c };
       t.nras['0'] = { nrasResponse: JSON.stringify(arr), jwks: JSON.stringify({ keys: [forged] }) };
+      return t;
+    },
+  },
+  // --- GPU evidence: the three mutations from the 2026-11-14 independent audit (F3) ---
+  {
+    id: 'gpu_reports_nulled',
+    title: 'GPU reports replaced with junk',
+    attack: 'Every raw GPU attestation report is replaced with null, while NVIDIA’s genuine signed verdict for the original GPUs is kept.',
+    expect: 'FAILED',
+    property: 'gpu_tee',
+    check: 'gpu_evidence',
+    apply: (b) => editGpuPayload(b, (p) => {
+      p.evidence_list = (p.evidence_list as unknown[]).map(() => null);
+    }),
+  },
+  {
+    id: 'gpu_detached_token_forged',
+    title: 'Per-GPU NVIDIA claim forged',
+    attack: 'One GPU’s detached NVIDIA token is replaced with a forged one. The platform token signs a SHA-256 digest of every per-GPU token, so the forgery no longer matches.',
+    expect: 'FAILED',
+    property: 'gpu_tee',
+    check: 'gpu_claims',
+    apply: (b) => editNras(b, (arr) => {
+      (arr[1] as Record<string, string>)['GPU-0'] = 'this.is.forged';
+    }),
+  },
+  {
+    id: 'gpu_inventory_invented',
+    title: 'Invented GPU inventory',
+    attack: 'The bundle claims 99 GPUs of an invented architecture and drops NVIDIA’s per-GPU tokens, hoping the receipt shows the invented inventory.',
+    expect: 'FAILED',
+    property: 'gpu_tee',
+    check: 'gpu_evidence',
+    apply: (b) => {
+      const t = editGpuPayload(b, (p) => {
+        p.arch = 'ATTACKER-INVENTED-GPU';
+        p.evidence_list = Array(99).fill({ evidence: '00', certificate: 'not-a-cert', nonce: p.nonce });
+      });
+      return editNras(t, (arr) => {
+        arr[1] = {};
+      });
+    },
+  },
+  {
+    id: 'gpu_device_substituted',
+    title: 'One GPU report swapped for another',
+    attack: 'One genuine, correctly signed GPU report is replaced by a copy of another GPU’s report. Every signature still verifies, but NVIDIA appraised a different set of devices.',
+    expect: 'FAILED',
+    property: 'gpu_tee',
+    check: 'gpu_inventory',
+    apply: (b) => editGpuPayload(b, (p) => {
+      const l = p.evidence_list as unknown[];
+      l[l.length - 1] = l[0];
+    }),
+  },
+  {
+    id: 'completion_metadata_forged',
+    title: 'Unsigned metadata rewritten',
+    attack: 'The recorded endpoint, completion id and connection certificate are rewritten. None of them is inside the signed hashes, so they are cross-checked against the signed response bytes and the attested connection.',
+    expect: 'FAILED',
+    property: 'response_signature',
+    check: 'chat_id_bound',
+    apply: (b) => {
+      const t = clone(b);
+      t.endpoint = 'https://attacker.invalid';
+      t.completion!.chat_id = 'forged-chat-id';
+      t.completion!.peer_spki_sha256 = '00'.repeat(32);
       return t;
     },
   },

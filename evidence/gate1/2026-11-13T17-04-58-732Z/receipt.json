@@ -1,8 +1,8 @@
 {
   "schema": "privatetriage.receipt/v1",
-  "verifier": "privatetriage-verifier/1 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS)",
+  "verifier": "privatetriage-verifier/2 (policy: TCB UpToDate only, provider_tee signer, Intel PCS, NVIDIA NRAS + per-GPU claims + device reports)",
   "verdict": "VERIFIED",
-  "headline": "Confidential execution verified: attested gateway and GPU-backed model TEE, response signed in the model enclave.",
+  "headline": "Confidential execution verified: attested gateway and GPU-backed model TEE; response signed by the model deployment’s enclave key.",
   "captured_at": "2026-11-13T17:04:58.732Z",
   "endpoint": "https://cloud-api.near.ai",
   "model": "z-ai/glm-5.3-flash",
@@ -15,6 +15,8 @@
   "request_sha256": "5d30592f2b7b523fac423a7446e1ed8a5a7ef970cab8aba0563274159002ac8d",
   "response_sha256": "19af810f42ba38680e9c9290a4546e3ada807bd806fe6c82c3971dcc364da81b",
   "chat_id": "64622715406f406f8d159bae8b6375b1",
+  "transmission": "sent",
+  "transmission_detail": "Report delivered to the gateway; HTTP 200 response recorded.",
   "disclosed": true,
   "signer": {
     "kind": "provider_tee",
@@ -105,7 +107,7 @@
     {
       "id": "tls_binding",
       "title": "Your report was encrypted to the attested gateway",
-      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence; offline re-verification checks them against the quote but cannot re-observe the connection.",
+      "statement": "The TLS session carrying the report terminated inside the attested gateway enclave, not at an intermediary. The peer certificate and socket identity are observed live by the backend that captured this evidence (a recorder assertion); offline re-verification checks them against the quote but cannot re-observe the connection.",
       "checks": [
         {
           "id": "tls_spki",
@@ -114,10 +116,16 @@
           "detail": "SPKI of the certificate on this very connection equals the quote-bound fingerprint."
         },
         {
+          "id": "endpoint",
+          "label": "Recorded endpoint is NEAR AI Cloud",
+          "status": "pass",
+          "detail": "Endpoint https://cloud-api.near.ai (recorded by the backend)."
+        },
+        {
           "id": "same_connection",
           "label": "Report sent over the attested connection",
           "status": "pass",
-          "detail": "The inference request used the same TLS connection whose certificate was matched to the gateway quote."
+          "detail": "The inference request used the same TLS connection (same socket, same peer certificate key) that was matched to the gateway quote."
         }
       ],
       "verdict": "VERIFIED"
@@ -125,7 +133,7 @@
     {
       "id": "model_tee",
       "title": "Model runs in a genuine Intel TDX enclave",
-      "statement": "The model-serving environment runs measured software in an Intel TDX confidential VM, bound to the signing key, and answered our fresh challenge.",
+      "statement": "Every model-serving environment NEAR returned for this model runs pinned, measured software in an Intel TDX confidential VM, is bound to its signing key, and answered our fresh challenge.",
       "checks": [
         {
           "id": "quote_verified",
@@ -205,19 +213,25 @@
     {
       "id": "gpu_tee",
       "title": "Model GPUs are in confidential-computing mode",
-      "statement": "NVIDIA attested — and signed a verdict bound to our nonce — that the GPUs serving the model are genuine and running in confidential-computing mode with expected firmware.",
+      "statement": "Each GPU report reported by the model enclave is signed by a genuine NVIDIA GPU and answers our nonce; NVIDIA’s signed appraisal of exactly those GPUs (per-GPU claims bound into the platform token) reports confidential-computing measurements that match, secure boot and no debug.",
       "checks": [
         {
           "id": "gpu_evidence",
           "label": "GPU evidence present",
           "status": "pass",
-          "detail": "8 × HOPPER GPU attestation reports."
+          "detail": "8 raw GPU attestation reports, as returned by NEAR (authenticated below)."
         },
         {
           "id": "gpu_nonce",
           "label": "GPU evidence answers our nonce",
           "status": "pass",
-          "detail": "nvidia_payload.nonce equals our client nonce."
+          "detail": "nvidia_payload and every GPU entry name our client nonce."
+        },
+        {
+          "id": "gpu_device_reports",
+          "label": "Raw GPU reports signed by genuine NVIDIA GPUs",
+          "status": "pass",
+          "detail": "All 8 reports: device certificate chains to the pinned NVIDIA Device Identity CA, the SPDM measurement report is signed by the device key, and the signed request carries our nonce."
         },
         {
           "id": "nras_signature",
@@ -241,15 +255,27 @@
           "id": "nras_verdict",
           "label": "NVIDIA NRAS verdict",
           "status": "pass",
-          "detail": "x-nvidia-overall-att-result = true (GPU CC mode, firmware/driver measurements, cert chains)."
+          "detail": "x-nvidia-overall-att-result = true (NVIDIA-signed overall platform appraisal)."
+        },
+        {
+          "id": "gpu_claims",
+          "label": "Per-GPU NVIDIA claims authenticated",
+          "status": "pass",
+          "detail": "8 per-GPU tokens match the digests signed in the platform token, verify under the pinned NVIDIA key policy and answer our nonce; each reports firmware/driver measurements match NVIDIA reference values, secure boot enabled, debug disabled, architecture check passed, report signature verified by NRAS, device certificate chain validated by NRAS, report nonce matched."
+        },
+        {
+          "id": "gpu_inventory",
+          "label": "Appraised GPUs are the reported GPUs",
+          "status": "pass",
+          "detail": "The 8 NVIDIA-signed device ids equal the serial numbers of the 8 reported GPU device certificates, one to one."
         }
       ],
       "verdict": "VERIFIED"
     },
     {
       "id": "response_signature",
-      "title": "Analysis was signed inside the model enclave",
-      "statement": "The model TEE signed SHA-256 hashes of the exact request we sent and the exact response we received, with a key that the attested hardware vouches for; the attestation challenge was derived from that same request.",
+      "title": "Response was signed by the model deployment’s enclave key",
+      "statement": "A key that the attested model enclave vouches for signed SHA-256 hashes of the exact serialized API request (system prompt, report, model and parameters) and the exact response bytes; the attestation challenge was derived from that same request. Checked after the response, so it cannot gate disclosure.",
       "checks": [
         {
           "id": "capture_time",
@@ -280,6 +306,12 @@
           "label": "Included response bytes match the signed hash",
           "status": "pass",
           "detail": "SHA-256 of the included response bytes equals the signed response hash."
+        },
+        {
+          "id": "chat_id_bound",
+          "label": "Completion id comes from the signed response",
+          "status": "pass",
+          "detail": "Completion id 64622715406f406f8d159bae is the id inside the signed response bytes."
         },
         {
           "id": "signature_present",
@@ -373,26 +405,31 @@
     },
     "gpu": {
       "count": 8,
-      "arch": "HOPPER",
+      "arch": "GH100",
+      "source": "NVIDIA-signed per-GPU claims, matched to the reported device certificates",
+      "driver_versions": [
+        "595.58.03"
+      ],
       "nras_iat": 1794589501,
       "nras_jti": "0abe6614-06f7-4382-9173-0d9caa78420e",
       "nras_eat_nonce": "d73223a77e4f0ac3344d292d0b4196d88b5ddbbd40f829e033db98746ba77f73"
     }
   },
   "not_proven": [
-    "That the model’s security analysis is correct. AI triage is a recommendation; attestation proves how it ran, not what it concluded.",
+    "That the model’s security analysis is correct. AI triage is a recommendation; attestation describes how it ran, not whether its conclusions are right.",
     "That NEAR AI Cloud does not retain prompts. Attestation identifies measured software; it does not audit retention behaviour of that software.",
     "End-to-end encryption to the model. TLS terminates in the attested gateway TEE; the gateway then forwards to the model TEE over a channel this receipt does not verify.",
-    "Image provenance. Container digests are measured and displayed, but not checked against a source-build allowlist.",
-    "That the verified model report and the completion came from the same serving instance (instances of one model share a signing key).",
-    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost.",
-    "That NEAR’s pinned software is free of vulnerabilities. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software."
+    "Which serving instance answered. Instances of one model share a signing key and may run different measured configurations, so the signature identifies the model deployment’s key, not the attested instance.",
+    "Image or model-weight provenance. Container digests and an app compose are measured and displayed, but not checked against a source-build or model-weight allowlist; any compose of the pinned NEAR app is accepted.",
+    "That NEAR’s pinned software is free of vulnerabilities or behaves as published. Measurements identify which dstack OS image and NEAR app ran (pinned on first observation, 2026-11-13); they are not an audit of that software.",
+    "Freshness today. A recorded receipt is a historical appraisal against archived Intel/NVIDIA collateral at capture time, not a current revocation check.",
+    "Confidentiality between the user’s browser and the PrivateTriage backend beyond standard HTTPS/localhost."
   ],
   "trust_assumptions": [
     "Intel TDX hardware and Intel’s attestation signing root (DCAP / PCS).",
-    "NVIDIA H100/H200 confidential-computing hardware and NVIDIA NRAS signing keys (JWKS fetched over WebPKI TLS).",
-    "The measured NEAR AI Cloud software stack (dstack, gateway, model server) behaves as its published source describes.",
-    "The PrivateTriage backend you run: it holds the API key, sees your report in plaintext, and performs these checks.",
+    "NVIDIA confidential-computing GPUs, NVIDIA’s Device Identity CA (pinned to NVIDIA’s published root) and NRAS signing keys (intermediates pinned on first observation; no full NVIDIA certificate-revocation policy).",
+    "NEAR AI Cloud as operator: its measured software (dstack, gateway, model server, management components), its deployment and key-provisioning governance, and its gateway-to-model channel.",
+    "The PrivateTriage backend you run: it holds the API key, sees your report in plaintext, performs these checks, and records the connection observations (socket ids, peer certificates, timings) that offline verification cannot re-observe.",
     "WebPKI for the TLS connections to Intel PCS, NVIDIA NRAS and NEAR AI Cloud."
   ]
 }
