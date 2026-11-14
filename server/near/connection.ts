@@ -23,6 +23,22 @@ export interface Exchange {
   reusedSocket: boolean;
 }
 
+/**
+ * What the transport can prove about a request's delivery.
+ * - `not_sent`: refused before any byte (headers included) was written.
+ * - `may_have_been_sent`: bytes were handed to the socket, but no response arrived
+ *   (reset, timeout); the peer may have received the full request.
+ * - `sent`: the peer answered, so it received the request (the response may still
+ *   be incomplete or rejected).
+ */
+export type TransmissionState = 'not_sent' | 'may_have_been_sent' | 'sent';
+
+/** Mutable progress record. Callers must initialise it to `may_have_been_sent`
+ * (the conservative default); only the transport itself may lower it to `not_sent`. */
+export interface TransmissionTracker {
+  state: TransmissionState;
+}
+
 export interface RequestOptions {
   method: 'GET' | 'POST';
   path: string;
@@ -37,7 +53,12 @@ export interface RequestOptions {
    * the API key or the report.
    */
   requireSocket?: { id: number; spkiSha256: string };
+  /** Updated as the request progresses (see TransmissionState). */
+  transmission?: TransmissionTracker;
 }
+
+const hasCredential = (h: Record<string, string> | undefined): boolean =>
+  Boolean(h && Object.keys(h).some((k) => k.toLowerCase() === 'authorization' || k.toLowerCase() === 'cookie'));
 
 export class SocketPinError extends Error {}
 
@@ -89,7 +110,20 @@ export class PinnedConnection {
 
   request(opts: RequestOptions): Promise<Exchange> {
     const limit = opts.maxResponseBytes ?? 4 * 1024 * 1024;
+    const tx = opts.transmission;
+    if (tx) tx.state = 'not_sent';
+    // Every credential-bearing request must be pinned to an attested socket. This is
+    // structural, so a future call site cannot forget it (audit finding F1).
+    if (hasCredential(opts.headers) && !opts.requireSocket) {
+      return Promise.reject(new SocketPinError('Refusing to send credentials on a TLS connection that is not pinned to the attested one.'));
+    }
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = (e: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(e);
+      };
       const headers: Record<string, string> = {
         Accept: 'application/json',
         'Accept-Encoding': 'identity',
@@ -108,6 +142,8 @@ export class PinnedConnection {
           ...(this.ca ? { ca: this.ca } : {}),
         },
         (res) => {
+          // The peer answered: it received the request.
+          if (tx) tx.state = 'sent';
           const socket = res.socket as TLSSocket;
           const { id, spki } = this.tag(socket);
           const chunks: Buffer[] = [];
@@ -121,6 +157,12 @@ export class PinnedConnection {
             chunks.push(chunk);
           });
           res.on('end', () => {
+            if (settled) return;
+            if (!res.complete) {
+              fail(new Error('response ended before it was complete'));
+              return;
+            }
+            settled = true;
             resolve({
               status: res.statusCode ?? 0,
               headers: res.headers,
@@ -130,12 +172,16 @@ export class PinnedConnection {
               reusedSocket: req.reusedSocket,
             });
           });
-          res.on('error', reject);
+          res.on('error', fail);
+          // A truncated response (peer closes mid-body) must never resolve.
+          res.on('close', () => fail(new Error('response ended before it was complete')));
         },
       );
       req.setTimeout(opts.timeoutMs ?? 120_000, () => req.destroy(new Error('request timed out')));
-      req.on('error', reject);
+      req.on('error', fail);
       const send = () => {
+        // From here on the peer may receive the request, even if no response ever arrives.
+        if (tx) tx.state = 'may_have_been_sent';
         if (opts.body) req.write(opts.body);
         req.end();
       };

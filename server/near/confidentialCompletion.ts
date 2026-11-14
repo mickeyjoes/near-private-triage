@@ -6,8 +6,11 @@
 // 3. Verify gateway quote, TLS-key binding, every model candidate and its GPU
 //    evidence. If anything fails, STOP: the confidential report is never sent.
 // 4. Send the completion over the same connection (x-no-aliasing, identity
-//    encoding, non-streaming so the model TEE — not the gateway — signs).
-// 5. Fetch the response signature and evaluate the complete evidence bundle.
+//    encoding, non-streaming so the model TEE — not the gateway — signs). The
+//    transport records whether the report was not sent, may have been sent, or
+//    was sent; a failed response never turns into "withheld".
+// 5. Fetch the response signature — also pinned to the attested socket, so the
+//    API key never travels on a replacement connection — and evaluate the bundle.
 //
 // Never logs the API key, request content or response content.
 import { randomBytes } from 'node:crypto';
@@ -23,7 +26,7 @@ import {
 import { fetchNrasEvidence, type NrasEvidence, parseGpuPayload } from '../verifier/gpu.ts';
 import { DEFAULT_POLICY, type ReportPolicy } from '../verifier/nearReport.ts';
 import { type Collateral, fetchCollateral } from '../verifier/tdx.ts';
-import { PinnedConnection, SocketPinError } from './connection.ts';
+import { PinnedConnection, SocketPinError, type TransmissionTracker } from './connection.ts';
 
 export const DEFAULT_ENDPOINT = 'https://cloud-api.near.ai';
 
@@ -177,12 +180,14 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
     stage('appraisal', pre.ok ? `Gateway + ${pre.verifiedModelSigners.length} model TEE verified` : pre.reason);
     if (!pre.ok) {
       bundle.blocked_reason = bundle.blocked_reason ?? pre.reason;
+      bundle.transmission = { state: 'not_sent', detail: 'Preflight attestation did not verify; the report was not sent.' };
       stage('blocked', 'Report NOT sent: attestation did not verify');
       const { receipt } = evaluateBundle(bundle, { policy: bundle.policy });
       return { bundle, receipt, requestBytes, responseBytes: null };
     }
     if (opts.preflightOnly) {
       bundle.blocked_reason = 'Preflight only: attestation verified, no report was sent.';
+      bundle.transmission = { state: 'not_sent', detail: 'Preflight only; no request was sent.' };
       stage('verdict', 'Preflight passed; nothing sent');
       const { receipt } = evaluateBundle(bundle, { policy: bundle.policy });
       return { bundle, receipt, requestBytes, responseBytes: null };
@@ -191,9 +196,14 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
     // --- Confidential inference over the attested connection ---
     stage('inference', 'Sending report over the attested TLS session');
     let responseBytes: Buffer | null = null;
+    const pin = { id: bundle.attestation!.socket_id, spkiSha256: bundle.attestation!.peer_spki_sha256! };
+    // Conservative default: once the request is handed to the transport, assume it
+    // may have left. Only the transport can prove otherwise (pin refused before writing).
+    const tx: TransmissionTracker = { state: 'may_have_been_sent' };
     try {
       const ex = await conn.request({
-        requireSocket: { id: bundle.attestation!.socket_id, spkiSha256: bundle.attestation!.peer_spki_sha256! },
+        requireSocket: pin,
+        transmission: tx,
         method: 'POST',
         path: '/v1/chat/completions',
         headers: {
@@ -220,9 +230,21 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
         socket_id: ex.socketId,
         peer_spki_sha256: ex.peerSpkiSha256,
       };
+      bundle.transmission = { state: 'sent', detail: `Report delivered to the attested gateway; HTTP ${ex.status} response received.` };
     } catch (e) {
-      bundle.blocked_reason =
-        e instanceof SocketPinError ? `Report NOT sent: ${e.message}` : `Inference request failed: ${(e as Error).message}`;
+      const msg = (e as Error).message;
+      // A partial exchange is recorded as such: no response hash is invented.
+      // Only the transport lowers the state to not_sent, and only before writing anything.
+      if (tx.state === 'not_sent') {
+        bundle.blocked_reason = `Report NOT sent: ${msg}`;
+        bundle.transmission = { state: 'not_sent', detail: bundle.blocked_reason };
+      } else if (tx.state === 'sent') {
+        bundle.blocked_reason = `Report SENT, but the response was incomplete or rejected (${msg}).`;
+        bundle.transmission = { state: 'sent', detail: bundle.blocked_reason };
+      } else {
+        bundle.blocked_reason = `Report MAY HAVE BEEN SENT: the request was written to the attested connection, but no response arrived (${msg}). Treat the report as disclosed to the gateway.`;
+        bundle.transmission = { state: 'may_have_been_sent', detail: bundle.blocked_reason };
+      }
     }
 
     // --- Signature (bounded retry: it may take a moment to be recorded) ---
@@ -233,7 +255,11 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
       const tries = opts.signatureRetries ?? 5;
       for (let i = 0; i < tries; i++) {
         try {
+          // Pinned like the report POST: the Authorization header is only written on
+          // the attested socket. If that connection is gone, stop (fail closed):
+          // the signature is then UNVERIFIED rather than fetched on an unverified socket.
           const ex = await conn.request({
+            requireSocket: pin,
             method: 'GET',
             path: `/v1/signature/${encodeURIComponent(chatId)}?${sq.toString()}`,
             headers: { Authorization: `Bearer ${opts.apiKey}` },
@@ -241,8 +267,12 @@ export async function runConfidentialCompletion(opts: RunOptions): Promise<RunRe
           });
           bundle.signature = { status: ex.status, body: ex.body.toString('utf8'), socket_id: ex.socketId, peer_spki_sha256: ex.peerSpkiSha256 };
           if (ex.status !== 404) break;
-        } catch {
+        } catch (e) {
           bundle.signature = null;
+          if (e instanceof SocketPinError) {
+            bundle.signature_error = `Signature not fetched: ${e.message} The API key was not sent on a replacement connection.`;
+            break;
+          }
         }
         await new Promise((r) => setTimeout(r, 800 * (i + 1)));
       }
